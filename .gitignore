@@ -60,3 +60,10 @@ dickens/
 book.txt
 lightrag-dev/
 gui/
+
+tmp.*
+*.html
+tmp_file/
+lib/
+cs_test/
+

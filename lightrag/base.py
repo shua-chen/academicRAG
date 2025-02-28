@@ -32,7 +32,7 @@ T = TypeVar("T")
 class QueryParam:
     """Configuration parameters for query execution in LightRAG."""
 
-    mode: Literal["local", "global", "hybrid", "naive", "mix"] = "global"
+    mode: Literal["local", "global", "hybrid", "naive", "mix","subgraph"] = "global"
     """Specifies the retrieval mode:
     - "local": Focuses on context-dependent information.
     - "global": Utilizes global knowledge.
@@ -207,6 +207,12 @@ class BaseGraphStorage(StorageNameSpace, ABC):
         self, node_label: str, max_depth: int = 5
     ) -> KnowledgeGraph:
         """Retrieve a subgraph of the knowledge graph starting from a given node."""
+
+    @abstractmethod
+    async def get_smallest_subgraph(
+        self, nodes: set[str]
+    ) -> KnowledgeGraph:
+        """Retrieve the smallest subgraph connecting all nodes."""
 
 
 class DocStatus(str, Enum):

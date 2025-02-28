@@ -10,7 +10,7 @@ from pyvis.network import Network
 import random
 
 # Load the GraphML file
-G = nx.read_graphml("./dickens/graph_chunk_entity_relation.graphml")
+G = nx.read_graphml("./cstest_qwen2.5/subgraph.graphml")
 
 # Create a Pyvis network
 net = Network(height="100vh", notebook=True)
@@ -31,4 +31,4 @@ for edge in net.edges:
         edge["title"] = edge["description"]
 
 # Save and display the network
-net.show("knowledge_graph.html")
+net.show("subgraph.html")

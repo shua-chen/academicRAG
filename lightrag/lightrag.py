@@ -31,6 +31,7 @@ from .operate import (
     extract_entities,
     extract_keywords_only,
     kg_query,
+    kg_query_with_clues,
     kg_query_with_keywords,
     mix_kg_vector_query,
     naive_query,
@@ -262,11 +263,11 @@ class LightRAG:
 
     _storages_status: StoragesStatus = field(default=StoragesStatus.NOT_CREATED)
 
-    def __post_init__(self):
-        logger.setLevel(self.log_level)
+    def __post_init__(self):        
         os.makedirs(os.path.dirname(self.log_file_path), exist_ok=True)
         set_logger(self.log_file_path)
-        logger.info(f"Logger initialized for working directory: {self.working_dir}")
+        logger.setLevel(self.log_level)
+        logger.info(f"Logger initialized for working directory: {self.working_dir}, log level: {self.log_level}")
 
         if not os.path.exists(self.working_dir):
             logger.info(f"Creating working directory {self.working_dir}")
@@ -370,6 +371,13 @@ class LightRAG:
                 self.namespace_prefix, NameSpace.VECTOR_STORE_CHUNKS
             ),
             embedding_func=self.embedding_func,
+        )        
+        self.keywords_vdb: BaseVectorStorage = self.vector_db_storage_cls(  # type: ignore
+            namespace=make_namespace(
+                self.namespace_prefix, NameSpace.VECTOR_STORE_KEYWORDS
+            ),
+            embedding_func=self.embedding_func,
+            meta_fields={"keywords", "source_id"}
         )
 
         # Initialize document status storage
@@ -744,6 +752,7 @@ class LightRAG:
                 knowledge_graph_inst=self.chunk_entity_relation_graph,
                 entity_vdb=self.entities_vdb,
                 relationships_vdb=self.relationships_vdb,
+                keywords_vdb=self.keywords_vdb,
                 llm_response_cache=self.llm_response_cache,
                 global_config=asdict(self),
             )
@@ -760,6 +769,7 @@ class LightRAG:
                 self.llm_response_cache,
                 self.entities_vdb,
                 self.relationships_vdb,
+                self.keywords_vdb,
                 self.chunks_vdb,
                 self.chunk_entity_relation_graph,
             ]
@@ -892,6 +902,26 @@ class LightRAG:
                 all_relationships_data.append(edge_data)
                 update_storage = True
 
+            all_keywords_data: list[dict[str, str]] = []
+            for keywords_data in custom_kg.get("keywords", []):
+                source_id = f'"{keywords_data["source_id"]}"'
+                keywords = keywords_data.get("keywords")
+
+                # Log if source_id is UNKNOWN
+                if source_id == "UNKNOWN":
+                    logger.warning(
+                        f"Chunks with keywords: '{keywords}' has an UNKNOWN source_id. Please check the source mapping."
+                    )
+
+                # Prepare node data
+                keyword_data: dict[str, str] = {
+                    "source_id": source_id,
+                    "keywords": keywords,
+                }
+
+                all_keywords_data.append(keyword_data)
+                update_storage = True
+
             # Insert entities into vector storage if needed
             data_for_vdb = {
                 compute_mdhash_id(dp["entity_name"], prefix="ent-"): {
@@ -915,6 +945,15 @@ class LightRAG:
                 for dp in all_relationships_data
             }
             await self.relationships_vdb.upsert(data_for_vdb)
+
+            data_for_vdb = {
+                compute_mdhash_id(dp["source_id"] + dp["keywords"], prefix="key-"): {
+                    "source_id": dp["source_id"],
+                    "content": dp["keywords"],
+                }
+                for dp in all_keywords_data
+            }
+            await self.keywords_vdb.upsert(data_for_vdb)
 
         finally:
             if update_storage:
@@ -958,13 +997,35 @@ class LightRAG:
         Returns:
             str: The result of the query execution.
         """
-        if param.mode in ["local", "global", "hybrid"]:
+        if param.mode in ["local", "global", "hybrid","subgraph"]:
             response = await kg_query(
                 query,
                 self.chunk_entity_relation_graph,
                 self.entities_vdb,
                 self.relationships_vdb,
                 self.text_chunks,
+                param,
+                asdict(self),
+                hashing_kv=self.llm_response_cache
+                if self.llm_response_cache
+                and hasattr(self.llm_response_cache, "global_config")
+                else self.key_string_value_json_storage_cls(
+                    namespace=make_namespace(
+                        self.namespace_prefix, NameSpace.KV_STORE_LLM_RESPONSE_CACHE
+                    ),
+                    global_config=asdict(self),
+                    embedding_func=self.embedding_func,
+                ),
+                system_prompt=system_prompt,
+            )
+        elif param.mode in ["local_with_clues", "global_with_clues", "hybrid_with_clues"]:
+            response = await kg_query_with_clues(
+                query,
+                self.chunk_entity_relation_graph,
+                self.entities_vdb,
+                self.relationships_vdb,
+                self.text_chunks,
+                self.keywords_vdb,
                 param,
                 asdict(self),
                 hashing_kv=self.llm_response_cache

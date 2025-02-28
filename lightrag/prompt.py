@@ -1,22 +1,22 @@
 from __future__ import annotations
-from typing import Any
 
 GRAPH_FIELD_SEP = "<SEP>"
 
-PROMPTS: dict[str, Any] = {}
+PROMPTS = {}
 
 PROMPTS["DEFAULT_LANGUAGE"] = "English"
 PROMPTS["DEFAULT_TUPLE_DELIMITER"] = "<|>"
 PROMPTS["DEFAULT_RECORD_DELIMITER"] = "##"
 PROMPTS["DEFAULT_COMPLETION_DELIMITER"] = "<|COMPLETE|>"
+PROMPTS["process_tickers"] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
 PROMPTS["DEFAULT_ENTITY_TYPES"] = ["organization", "person", "geo", "event", "category"]
 
-PROMPTS["entity_extraction"] = """---Goal---
+PROMPTS["entity_extraction"] = """-Goal-
 Given a text document that is potentially relevant to this activity and a list of entity types, identify all entities of those types from the text and all relationships among the identified entities.
 Use {language} as output language.
 
----Steps---
+-Steps-
 1. Identify all entities. For each identified entity, extract the following information:
 - entity_name: Name of the entity, use same language as input text. If English, capitalized the name.
 - entity_type: One of the following types: [{entity_types}]
@@ -40,17 +40,18 @@ Format the content-level key words as ("content_keywords"{tuple_delimiter}<high_
 5. When finished, output {completion_delimiter}
 
 ######################
----Examples---
+-Examples-
 ######################
 {examples}
 
 #############################
----Real Data---
+-Real Data-
 ######################
 Entity_types: {entity_types}
 Text: {input_text}
 ######################
-Output:"""
+Output:
+"""
 
 PROMPTS["entity_extraction_examples"] = [
     """Example 1:
@@ -135,7 +136,7 @@ Make sure it is written in third person, and include the entity names so we the 
 Use {language} as output language.
 
 #######
----Data---
+-Data-
 Entities: {entity_name}
 Description List: {description_list}
 #######
@@ -186,13 +187,13 @@ When handling relationships with timestamps:
 - If you don't know the answer, just say so.
 - Do not make anything up. Do not include information not provided by the Knowledge Base."""
 
-PROMPTS["keywords_extraction"] = """---Role---
+PROMPTS["keywords_extraction_clues"] = """---Role---
 
 You are a helpful assistant tasked with identifying both high-level and low-level keywords in the user's query and conversation history.
 
 ---Goal---
 
-Given the query and conversation history, list both high-level and low-level keywords. High-level keywords focus on overarching concepts or themes, while low-level keywords focus on specific entities, details, or concrete terms.
+Given the query, content keywords from data base and conversation history, list both high-level and low-level keywords. High-level keywords focus on overarching concepts or themes, while low-level keywords focus on specific entities, details, or concrete terms.
 
 ---Instructions---
 
@@ -203,22 +204,63 @@ Given the query and conversation history, list both high-level and low-level key
   - "low_level_keywords" for specific entities or details
 
 ######################
----Examples---
+-Examples-
 ######################
 {examples}
 
 #############################
----Real Data---
+-Real Data-
 ######################
 Conversation History:
 {history}
 
 Current Query: {query}
 ######################
+
+Data Base Content Keywords: {content_keywords}
+######################
+
 The `Output` should be human text, not unicode characters. Keep the same language as `Query`.
 Output:
 
 """
+
+PROMPTS["keywords_extraction"] = """---Role---
+
+You are a helpful assistant tasked with identifying both high-level and low-level keywords in the user's query and conversation history.
+
+---Goal---
+
+Given the query, and conversation history, list both high-level and low-level keywords. High-level keywords focus on overarching concepts or themes, while low-level keywords focus on specific entities, details, or concrete terms.
+
+---Instructions---
+
+- Consider both the current query and relevant conversation history when extracting keywords
+- Output the keywords in JSON format
+- The JSON should have two keys:
+  - "high_level_keywords" for overarching concepts or themes
+  - "low_level_keywords" for specific entities or details
+
+######################
+-Examples-
+######################
+{examples}
+
+#############################
+-Real Data-
+######################
+Conversation History:
+{history}
+
+Current Query: {query}
+######################
+
+
+The `Output` should be human text, not unicode characters. Keep the same language as `Query`.
+Output:
+
+"""
+
 
 PROMPTS["keywords_extraction_examples"] = [
     """Example 1:
@@ -344,3 +386,136 @@ When handling information with timestamps:
 - List up to 5 most important reference sources at the end under "References" sesction. Clearly indicating whether each source is from Knowledge Graph (KG) or Vector Data (DC), in the following format: [KG/DC] Source content
 - If you don't know the answer, just say so. Do not make anything up.
 - Do not include information not provided by the Data Sources."""
+
+
+PROMPTS["clue_extraction"] = """---Role---
+
+---Role---
+You're a precision-focused research assistant helping identify concrete search terms. Based on the provided information and existing keywords, generate specific clues that directly match retrievable items in our knowledge base.
+
+Read these carefully:
+
+---Context from Knowledge Base---
+{context_data}
+
+---Original Search Terms---
+{keywords}
+
+---Goal---
+Generate 3-5 clues that directly map to retrievable elements in the Knowledge Base for retrieval and answering.
+
+---Instructions---
+   - Clues are specific enough to find exact matches
+   - Use wording/phrases *directly* from the knowledge snippets
+   - Add new angles not covered by original keywords
+   - Match the query type:
+     * For analysis questions: comparison points, patterns
+     * For number/date questions: specific ranges or timeframes
+     * For overview requests: document sections or components
+   
+3. Format: Strict JSON with "clues" as key
+
+######################
+-Examples-
+######################
+{examples}
+
+#############################
+-Real Data-
+#############################
+Current Query: {query}
+#############################
+The `Output` should be human text, not unicode characters. Keep the same language as `Query`.
+Output:
+
+"""
+
+# No Usage
+PROMPTS["rag_with_clue_response"] = """---Role---
+
+You are a helpful assistant responding to user query about Knowledge Base provided below.
+
+---Goal---
+
+Generate a concise response based on Knowledge Base, clue questions and follow Response Rules, considering both the conversation history and the current query. Summarize all information in the provided Knowledge Base, and incorporating general knowledge relevant to the Knowledge Base. Do not include information not provided by Knowledge Base.
+
+When handling relationships with timestamps:
+1. Each relationship has a "created_at" timestamp indicating when we acquired this knowledge
+2. When encountering conflicting relationships, consider both the semantic content and the timestamp
+3. Don't automatically prefer the most recently created relationships - use judgment based on the context
+4. For time-specific queries, prioritize temporal information in the content before considering creation timestamps
+
+---Conversation History---
+{history}
+
+---Clue questions---
+{clues}
+
+---Knowledge Base---
+{context_data}
+
+---Response Rules---
+
+- Target format and length: {response_type}
+- Use markdown formatting with appropriate section headings
+- Please respond in the same language as the user's question.
+- Ensure the response maintains continuity with the conversation history.
+- If you don't know the answer, just say so.
+- Do not make anything up. Do not include information not provided by the Knowledge Base."""
+
+
+PROMPTS["clues_extraction_examples"] = [
+    """Example 1:
+
+    Query: "How to improve battery life in smartphones?"
+    ################
+    Output:
+    {
+      "clues": [
+        "screen brightness optimization",
+        "background app refresh",
+        "5G modem efficiency", 
+        "adaptive refresh rate",
+        "battery health algorithms",
+        "low-power processor modes",
+        "charging cycle patterns"
+      ]
+    }
+    #############################""",
+
+    """Example 2:
+
+Query: "Best practices for COVID-19 prevention"
+################
+Output:
+{
+  "clues": [
+    "mask filtration efficiency",
+    "ventilation standards",
+    "hand hygiene frequency",
+    "vaccine booster timing",
+    "surface disinfection methods",
+    "symptom monitoring criteria",
+    "high-risk exposure thresholds"
+  ]
+}
+#############################""",
+
+    """Example 3:
+
+Query: "Factors affecting bread fermentation"
+################
+Output:
+{
+  "clues": [
+    "yeast activation temperature",
+    "sugar concentration effects",
+    "dough hydration levels",
+    "proofing time ranges",
+    "altitude adjustments",
+    "enzyme activity inhibitors",
+    "gluten development impact"
+  ]
+}
+#############################""",
+]

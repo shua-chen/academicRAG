@@ -11,6 +11,7 @@ class NameSpace:
     VECTOR_STORE_ENTITIES = "entities"
     VECTOR_STORE_RELATIONSHIPS = "relationships"
     VECTOR_STORE_CHUNKS = "chunks"
+    VECTOR_STORE_KEYWORDS = "keywords"
 
     GRAPH_STORE_CHUNK_ENTITY_RELATION = "chunk_entity_relation"
 

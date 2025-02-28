@@ -2,6 +2,7 @@ import asyncio
 import inspect
 import os
 import re
+import logging
 from dataclasses import dataclass
 from typing import Any, List, Dict, final
 import numpy as np
@@ -15,7 +16,7 @@ from tenacity import (
     retry_if_exception_type,
 )
 
-from ..utils import logger
+#from ..utils import logger
 from ..base import BaseGraphStorage
 from ..types import KnowledgeGraph, KnowledgeGraphNode, KnowledgeGraphEdge
 import pipmaster as pm
@@ -33,7 +34,8 @@ from neo4j import (
 
 config = configparser.ConfigParser()
 config.read("config.ini", "utf-8")
-
+logger=logging.getLogger("neo4j")
+logger.setLevel(logging.WARNING)
 
 @final
 @dataclass
@@ -91,6 +93,7 @@ class Neo4JStorage(BaseGraphStorage):
             max_connection_pool_size=MAX_CONNECTION_POOL_SIZE,
             connection_timeout=CONNECTION_TIMEOUT,
             connection_acquisition_timeout=CONNECTION_ACQUISITION_TIMEOUT,
+            
         ) as _sync_driver:
             for database in (DATABASE, None):
                 self._DATABASE = database
@@ -175,7 +178,7 @@ class Neo4JStorage(BaseGraphStorage):
 
     async def _ensure_label(self, label: str) -> str:
         """Ensure a label exists by validating it."""
-        clean_label = label.strip('"')
+        clean_label = label
         if not await self._label_exists(clean_label):
             logger.warning(f"Label '{clean_label}' does not exist in Neo4j")
         return clean_label
@@ -194,8 +197,8 @@ class Neo4JStorage(BaseGraphStorage):
             return single_result["node_exists"]
 
     async def has_edge(self, source_node_id: str, target_node_id: str) -> bool:
-        entity_name_label_source = source_node_id.strip('"')
-        entity_name_label_target = target_node_id.strip('"')
+        entity_name_label_source = source_node_id
+        entity_name_label_target = target_node_id
 
         async with self._driver.session(database=self._DATABASE) as session:
             query = (
@@ -234,7 +237,7 @@ class Neo4JStorage(BaseGraphStorage):
             return None
 
     async def node_degree(self, node_id: str) -> int:
-        entity_name_label = node_id.strip('"')
+        entity_name_label = node_id
 
         async with self._driver.session(database=self._DATABASE) as session:
             query = f"""
@@ -253,8 +256,8 @@ class Neo4JStorage(BaseGraphStorage):
                 return None
 
     async def edge_degree(self, src_id: str, tgt_id: str) -> int:
-        entity_name_label_source = src_id.strip('"')
-        entity_name_label_target = tgt_id.strip('"')
+        entity_name_label_source = src_id
+        entity_name_label_target = tgt_id
         src_degree = await self.node_degree(entity_name_label_source)
         trg_degree = await self.node_degree(entity_name_label_target)
 
@@ -272,9 +275,8 @@ class Neo4JStorage(BaseGraphStorage):
         self, source_node_id: str, target_node_id: str
     ) -> dict[str, str] | None:
         try:
-            entity_name_label_source = source_node_id.strip('"')
-            entity_name_label_target = target_node_id.strip('"')
-
+            entity_name_label_source = source_node_id
+            entity_name_label_target = target_node_id
             async with self._driver.session(database=self._DATABASE) as session:
                 query = f"""
                 MATCH (start:`{entity_name_label_source}`)-[r]->(end:`{entity_name_label_target}`)
@@ -290,13 +292,13 @@ class Neo4JStorage(BaseGraphStorage):
                 if record:
                     try:
                         result = dict(record["edge_properties"])
-                        logger.info(f"Result: {result}")
+                        logger.debug(f"Result: {result}")
                         # Ensure required keys exist with defaults
                         required_keys = {
                             "weight": 0.0,
-                            "source_id": None,
-                            "description": None,
-                            "keywords": None,
+                            "description": "",
+                            "keywords": "",
+                            "source_id": "",
                         }
                         for key, default_value in required_keys.items():
                             if key not in result:
@@ -316,38 +318,23 @@ class Neo4JStorage(BaseGraphStorage):
                             f"and {entity_name_label_target}: {str(e)}"
                         )
                         # Return default edge properties on error
-                        return {
-                            "weight": 0.0,
-                            "description": None,
-                            "keywords": None,
-                            "source_id": None,
-                        }
+                        return None
 
                 logger.debug(
                     f"{inspect.currentframe().f_code.co_name}: No edge found between {entity_name_label_source} and {entity_name_label_target}"
                 )
                 # Return default edge properties when no edge found
-                return {
-                    "weight": 0.0,
-                    "description": None,
-                    "keywords": None,
-                    "source_id": None,
-                }
+                return None
 
         except Exception as e:
             logger.error(
                 f"Error in get_edge between {source_node_id} and {target_node_id}: {str(e)}"
             )
             # Return default edge properties on error
-            return {
-                "weight": 0.0,
-                "description": None,
-                "keywords": None,
-                "source_id": None,
-            }
+            return None
 
     async def get_node_edges(self, source_node_id: str) -> list[tuple[str, str]] | None:
-        node_label = source_node_id.strip('"')
+        node_label = source_node_id
 
         """
         Retrieves all edges (relationships) for a particular node identified by its label.
@@ -481,7 +468,7 @@ class Neo4JStorage(BaseGraphStorage):
         3. Clarify relationship directions
         4. Add depth control
         """
-        label = node_label.strip('"')
+        label = node_label
         result = KnowledgeGraph()
         seen_nodes = set()
         seen_edges = set()
@@ -660,3 +647,64 @@ class Neo4JStorage(BaseGraphStorage):
         self, algorithm: str
     ) -> tuple[np.ndarray[Any, Any], list[str]]:
         raise NotImplementedError
+    
+    async def get_smallest_subgraph(
+        self, target_nodes: set[str]
+    ) -> KnowledgeGraph:
+        required_nodes = set()
+        required_edges = set()
+        
+        # Verify target nodes exist in the graph
+        tasks=[self._ensure_label(node) for node in target_nodes]
+        valid_nodes = await asyncio.gather(*tasks)
+        valid_nodes = set(valid_nodes)
+
+        if not valid_nodes:
+            return None  # No valid nodes found in the graph
+        
+        # Find shortest paths between all valid target nodes
+        async with self._driver.session(database=self._DATABASE) as session:
+            # for u in valid_nodes:
+            #     for v in valid_nodes:
+            #         if u != v:
+            #             result = await session.run(
+            #                 """
+            #                 MATCH (start), (end)
+            #                 WHERE any(label IN labels(start) WHERE label = $u)
+            #                 AND any(label IN labels(end) WHERE label = $v)
+            #                 MATCH path = shortestPath((start)-[*]-(end))
+            #                 RETURN path
+            #                 """,
+            #                 u=u, v=v
+            #             )
+            #             async for record in result:
+            #                 path = record["path"].nodes
+            #                 path_edges = record["path"].relationships
+            #                 required_nodes.update([next(iter(node.labels)) for node in path])
+            #                 required_edges.update([tuple(sorted((next(iter(rel.nodes[0].labels)), next(iter(rel.nodes[1].labels))))) for rel in path_edges])
+            result = await session.run(
+                                """
+                                    MATCH (n) WHERE any(label IN labels(n) WHERE label IN $valid_nodes)
+                                    WITH collect(n) AS nodes
+                                    UNWIND nodes AS n1
+                                    UNWIND nodes AS n2
+                                    WITH n1, n2 
+                                    WHERE n1 <> n2
+                                    MATCH path = shortestPath((n1)-[*]-(n2))
+                                    RETURN path
+                                """,
+                                valid_nodes=list(valid_nodes)
+                            )
+            async for record in result:
+                path = record["path"].nodes
+                path_edges = record["path"].relationships
+                required_nodes.update([next(iter(node.labels)) for node in path])
+                required_edges.update([tuple(sorted((next(iter(rel.nodes[0].labels)), next(iter(rel.nodes[1].labels))))) for rel in path_edges])
+        # Add isolated target nodes (no path to other target nodes)
+        required_nodes.update(valid_nodes)
+        
+        # create a subgraph
+        subgraph=KnowledgeGraph()
+        subgraph.nodes=list(required_nodes)
+        subgraph.edges=list(required_edges)
+        return subgraph

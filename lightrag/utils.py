@@ -228,7 +228,7 @@ def clean_str(input: Any) -> str:
 
     result = html.unescape(input.strip())
     # https://stackoverflow.com/questions/4324790/removing-control-characters-from-a-string-in-python
-    return re.sub(r"[\x00-\x1f\x7f-\x9f]", "", result)
+    return re.sub(r"[\x00-\x1f\x7f-\x9f]", "", result).strip('" ')
 
 
 def is_float_regex(value: str) -> bool:
@@ -243,7 +243,8 @@ def truncate_list_by_token_size(
         return []
     tokens = 0
     for i, data in enumerate(list_data):
-        tokens += len(encode_string_by_tiktoken(key(data)))
+        if key(data):
+            tokens += len(encode_string_by_tiktoken(key(data)))
         if tokens > max_token_size:
             return list_data[:i]
     return list_data

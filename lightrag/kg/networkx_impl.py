@@ -175,3 +175,34 @@ class NetworkXStorage(BaseGraphStorage):
         self, node_label: str, max_depth: int = 5
     ) -> KnowledgeGraph:
         raise NotImplementedError
+    
+    async def get_smallest_subgraph(
+        self, target_nodes: set[str]
+    ) -> KnowledgeGraph:
+        # filter nodes not in the graph
+        valid_nodes = [n for n in target_nodes if n in self._graph]
+        if len(valid_nodes) == 0:
+            return None
+        required_nodes = set()
+        required_edges = set()
+        
+        # collect nodes and edges on the path for each pair of target nodes
+        for u in valid_nodes:
+            for v in valid_nodes:
+                if u != v and nx.has_path(self._graph, u, v):
+                    path = nx.shortest_path(self._graph, u, v)
+                    required_nodes.update(path)
+                    for i in range(len(path) - 1):
+                        edge = tuple(sorted((path[i], path[i + 1]))) 
+                        required_edges.add(edge)
+        
+        # add isolated target nodes (no path to other target nodes)
+        for node in valid_nodes:
+            if not any(nx.has_path(self._graph, node, other) for other in valid_nodes if other != node):
+                required_nodes.add(node)
+        
+        # create a subgraph
+        subgraph=KnowledgeGraph()
+        subgraph.nodes=list(required_nodes)
+        subgraph.edges=list(required_edges)
+        return subgraph

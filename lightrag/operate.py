@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import time
+from tqdm.asyncio import tqdm as tqdm_async
 from typing import Any, AsyncIterator
 from collections import Counter, defaultdict
 from .utils import (
@@ -175,6 +177,19 @@ async def _handle_single_relationship_extraction(
         metadata={"created_at": time.time()},
     )
 
+async def _handle_content_keyword_extraction(
+    record_attributes: list[str],
+    chunk_key: str,
+):
+    if record_attributes[0] != '"content_keywords"':
+        return None
+    # add this record as a node in the G
+    keywords = clean_str(record_attributes[1]).split(", ")
+    keywords_source_id = chunk_key
+    return dict(
+        keywords=keywords,
+        source_id=keywords_source_id,
+    )
 
 async def _merge_nodes_then_upsert(
     entity_name: str,
@@ -221,6 +236,19 @@ async def _merge_nodes_then_upsert(
         node_data=node_data,
     )
     node_data["entity_name"] = entity_name
+    return node_data
+
+async def _merge_keywords(
+    keyword: str,
+    nodes_data: list[dict],
+):
+
+    source_ids = GRAPH_FIELD_SEP.join(set([dp["source_id"] for dp in nodes_data]))
+
+    node_data = dict(
+        source_id = source_ids,
+        keywords=keyword,
+    )
     return node_data
 
 
@@ -327,6 +355,7 @@ async def extract_entities(
     knowledge_graph_inst: BaseGraphStorage,
     entity_vdb: BaseVectorStorage,
     relationships_vdb: BaseVectorStorage,
+    keywords_vdb: BaseVectorStorage,
     global_config: dict[str, str],
     llm_response_cache: BaseKVStorage | None = None,
 ) -> None:
@@ -378,6 +407,7 @@ async def extract_entities(
     already_processed = 0
     already_entities = 0
     already_relations = 0
+    already_keywords = 0
 
     async def _user_llm_func_with_cache(
         input_text: str, history_messages: list[dict[str, str]] = None
@@ -389,7 +419,7 @@ async def extract_entities(
             else:
                 _prompt = input_text
 
-            arg_hash = compute_args_hash(_prompt)
+            arg_hash = compute_args_hash(_prompt,global_config["llm_model_name"])
             cached_return, _1, _2, _3 = await handle_cache(
                 llm_response_cache,
                 arg_hash,
@@ -431,7 +461,7 @@ async def extract_entities(
             chunk_key_dp (tuple[str, TextChunkSchema]):
                 ("chunck-xxxxxx", {"tokens": int, "content": str, "full_doc_id": str, "chunk_order_index": int})
         """
-        nonlocal already_processed, already_entities, already_relations
+        nonlocal already_processed, already_entities, already_relations, already_keywords
         chunk_key = chunk_key_dp[0]
         chunk_dp = chunk_key_dp[1]
         content = chunk_dp["content"]
@@ -466,6 +496,7 @@ async def extract_entities(
 
         maybe_nodes = defaultdict(list)
         maybe_edges = defaultdict(list)
+        maybe_keywords = defaultdict(list)
         for record in records:
             record = re.search(r"\((.*)\)", record)
             if record is None:
@@ -488,25 +519,37 @@ async def extract_entities(
                 maybe_edges[(if_relation["src_id"], if_relation["tgt_id"])].append(
                     if_relation
                 )
+
+            if_keywords = await _handle_content_keyword_extraction(
+                record_attributes, chunk_key
+            )
+            if if_keywords is not None:
+                for keyword in if_keywords["keywords"]:
+                    maybe_keywords[keyword].append(if_keywords)
         already_processed += 1
         already_entities += len(maybe_nodes)
         already_relations += len(maybe_edges)
+        already_keywords += len(maybe_keywords)
 
         logger.debug(
             f"Processed {already_processed} chunks, {already_entities} entities(duplicated), {already_relations} relations(duplicated)\r",
         )
-        return dict(maybe_nodes), dict(maybe_edges)
+        return dict(maybe_nodes), dict(maybe_edges), dict(maybe_keywords)
 
     tasks = [_process_single_content(c) for c in ordered_chunks]
     results = await asyncio.gather(*tasks)
 
     maybe_nodes = defaultdict(list)
     maybe_edges = defaultdict(list)
-    for m_nodes, m_edges in results:
+    maybe_keywords = defaultdict(list)
+
+    for m_nodes, m_edges, m_keywords in results:
         for k, v in m_nodes.items():
             maybe_nodes[k].extend(v)
         for k, v in m_edges.items():
             maybe_edges[tuple(sorted(k))].extend(v)
+        for k, v in m_keywords.items():
+            maybe_keywords[k].extend(v)
 
     all_entities_data = await asyncio.gather(
         *[
@@ -521,6 +564,22 @@ async def extract_entities(
             for k, v in maybe_edges.items()
         ]
     )
+
+    all_keywords_data = []
+    for result in tqdm_async(
+        asyncio.as_completed(
+            [
+                _merge_keywords(k, v)
+                for k, v in maybe_keywords.items()
+            ]
+        ),
+        total=len(maybe_keywords),
+        desc="Level 3 - Inserting keywords",
+        unit="keywords",
+        position=4,
+        leave=False,
+    ):
+        all_keywords_data.append(await result)
 
     if not (all_entities_data or all_relationships_data):
         logger.info("Didn't extract any entities and relationships.")
@@ -562,6 +621,17 @@ async def extract_entities(
         }
         await relationships_vdb.upsert(data_for_vdb)
 
+    if keywords_vdb is not None:
+        data_for_vdb = {
+            compute_mdhash_id(dp["keywords"], prefix="key-"): {
+                "keywords": dp["keywords"],
+                "content": dp["keywords"],
+                "source_id": dp["source_id"],
+            }
+            for dp in all_keywords_data
+        }
+        await keywords_vdb.upsert(data_for_vdb)
+
 
 async def kg_query(
     query: str,
@@ -576,7 +646,7 @@ async def kg_query(
 ) -> str:
     # Handle cache
     use_model_func = global_config["llm_model_func"]
-    args_hash = compute_args_hash(query_param.mode, query, cache_type="query")
+    args_hash = compute_args_hash(query_param, query, cache_type="query")
     cached_response, quantized, min_val, max_val = await handle_cache(
         hashing_kv, args_hash, query, query_param.mode, cache_type="query"
     )
@@ -679,6 +749,165 @@ async def kg_query(
     )
     return response
 
+async def kg_query_with_clues(
+    query: str,
+    knowledge_graph_inst: BaseGraphStorage,
+    entities_vdb: BaseVectorStorage,
+    relationships_vdb: BaseVectorStorage,
+    text_chunks_db: BaseKVStorage,
+    keywords_db: BaseKVStorage,
+    query_param: QueryParam,
+    global_config: dict[str, str],
+    hashing_kv: BaseKVStorage | None = None,
+    system_prompt: str | None = None,
+    clue_prompt: str | None = None
+) -> str:
+    # Handle cache
+    use_model_func = global_config["llm_model_func"]
+    args_hash = compute_args_hash(query_param, query, cache_type="query")
+    cached_response, quantized, min_val, max_val = await handle_cache(
+        hashing_kv, args_hash, query, query_param.mode, cache_type="query"
+    )
+    if cached_response is not None:
+        return cached_response
+
+    # Extract keywords using extract_keywords_only function which already supports conversation history
+    hl_keywords, ll_keywords = await extract_keywords_with_keywords_vdb(
+        query, keywords_db, query_param, global_config, hashing_kv
+    )
+
+    logger.debug(f"High-level keywords: {hl_keywords}")
+    logger.debug(f"Low-level  keywords: {ll_keywords}")
+
+    # Handle empty keywords
+    if hl_keywords == [] and ll_keywords == []:
+        logger.warning("low_level_keywords and high_level_keywords is empty")
+        return PROMPTS["fail_response"]
+    if ll_keywords == [] and query_param.mode in ["local", "hybrid"]:
+        logger.warning(
+            "low_level_keywords is empty, switching from %s mode to global mode",
+            query_param.mode,
+        )
+        query_param.mode = "global"
+    if hl_keywords == [] and query_param.mode in ["global", "hybrid"]:
+        logger.warning(
+            "high_level_keywords is empty, switching from %s mode to local mode",
+            query_param.mode,
+        )
+        query_param.mode = "local"
+
+    ll_keywords = ", ".join(ll_keywords) if ll_keywords else ""
+    hl_keywords = ", ".join(hl_keywords) if hl_keywords else ""
+
+    logger.info("Using %s mode for query processing", query_param.mode)
+
+    # Build context
+    keywords = [ll_keywords, hl_keywords]
+
+    print(keywords)
+
+    context = await _build_query_context(
+        ll_keywords,
+        hl_keywords,
+        knowledge_graph_inst,
+        entities_vdb,
+        relationships_vdb,
+        text_chunks_db,
+        query_param,
+    )
+
+    if query_param.only_need_context:
+        return context
+    if context is None:
+        return PROMPTS["fail_response"]
+
+    # Process conversation history
+
+    history_context = ""
+    if query_param.conversation_history:
+        history_context = get_conversation_turns(
+            query_param.conversation_history, query_param.history_turns
+        )
+
+    # # Clues Extraction
+    # max_retries = query_param.max_clue_extraction_retries
+    # retries = 0
+    #
+    # while retries < max_retries:
+    #     clues = await extract_clues_only(query, context, keywords, query_param, global_config, hashing_kv, clue_prompt)
+    #
+    #     if clues != []:  # 如果 clues 非空，直接退出循环
+    #         break
+    #
+    #     retries += 1
+    #     logger.warning(f"Retrying extract clues... (Attempt {retries}/{max_retries})")
+    #
+    # if clues == []:  # 如果重试后 clues 仍为空
+    #     return PROMPTS["fail_response"]
+    #
+    # clues = ", ".join(clues) if clues else ""
+
+    # # Build context Again
+    #
+    # keywords = [
+    #     combine_keywords_clues(ll_keywords, clues),
+    #     combine_keywords_clues(hl_keywords, clues)
+    # ]
+    #
+    # context = await _build_query_context(
+    #     keywords,
+    #     knowledge_graph_inst,
+    #     entities_vdb,
+    #     relationships_vdb,
+    #     text_chunks_db,
+    #     query_param,
+    # )
+
+    sys_prompt_temp = system_prompt if system_prompt else PROMPTS["rag_response"]
+    sys_prompt = sys_prompt_temp.format(
+        context_data=context,
+        response_type=query_param.response_type,
+        history=history_context,
+    )
+
+    if query_param.only_need_prompt:
+        return sys_prompt
+
+    len_of_prompts = len(encode_string_by_tiktoken(query + sys_prompt))
+    logger.debug(f"[kg_query]Prompt Tokens: {len_of_prompts}")
+
+    response = await use_model_func(
+        query,
+        system_prompt=sys_prompt,
+        stream=query_param.stream,
+    )
+
+    if isinstance(response, str) and len(response) > len(sys_prompt):
+        response = (
+            response.replace(sys_prompt, "")
+            .replace("user", "")
+            .replace("model", "")
+            .replace(query, "")
+            .replace("<system>", "")
+            .replace("</system>", "")
+            .strip()
+        )
+
+    # Save to cache
+    await save_to_cache(
+        hashing_kv,
+        CacheData(
+            args_hash=args_hash,
+            content=response,
+            prompt=query,
+            quantized=quantized,
+            min_val=min_val,
+            max_val=max_val,
+            mode=query_param.mode,
+            cache_type="query",
+        ),
+    )
+    return response
 
 async def extract_keywords_only(
     text: str,
@@ -693,7 +922,7 @@ async def extract_keywords_only(
     """
 
     # 1. Handle cache if needed - add cache type for keywords
-    args_hash = compute_args_hash(param.mode, text, cache_type="keywords")
+    args_hash = compute_args_hash(param, text, cache_type="keywords")
     cached_response, quantized, min_val, max_val = await handle_cache(
         hashing_kv, args_hash, text, param.mode, cache_type="keywords"
     )
@@ -774,6 +1003,196 @@ async def extract_keywords_only(
         )
     return hl_keywords, ll_keywords
 
+async def extract_keywords_with_keywords_vdb(
+    text: str,
+    keywords_vdb: BaseKVStorage,
+    param: QueryParam,
+    global_config: dict[str, str],
+    hashing_kv: BaseKVStorage | None = None,
+) -> tuple[list[str], list[str]]:
+    """
+    Extract high-level and low-level keywords from the given 'text' using the LLM.
+    This method does NOT build the final RAG context or provide a final answer.
+    It ONLY extracts keywords (hl_keywords, ll_keywords).
+    """
+
+    # Handle cache if needed - add cache type for keywords
+    args_hash = compute_args_hash(param, text, cache_type="keywords")
+    cached_response, quantized, min_val, max_val = await handle_cache(
+        hashing_kv, args_hash, text, param.mode, cache_type="keywords"
+    )
+    if cached_response is not None:
+        try:
+            keywords_data = json.loads(cached_response)
+            return keywords_data["high_level_keywords"], keywords_data[
+                "low_level_keywords"
+            ]
+        except (json.JSONDecodeError, KeyError):
+            logger.warning(
+                "Invalid cache format for keywords, proceeding with extraction"
+            )
+
+    # Query the top-k keywords list from chunks
+
+    results = await keywords_vdb.query(text, top_k=param.top_k)
+
+    if not len(results):
+        return PROMPTS["fail_response"]
+
+    content_keywords = [keyword.strip() for r in results for keyword in r["keywords"].strip('"').split(",")]
+
+    unique_keywords = list(set(content_keywords))
+
+    content_keywords_string = ", ".join(unique_keywords)
+
+    # Build the examples
+    example_number = global_config["addon_params"].get("example_number", None)
+    if example_number and example_number < len(PROMPTS["keywords_extraction_examples"]):
+        examples = "\n".join(
+            PROMPTS["keywords_extraction_examples"][: int(example_number)]
+        )
+    else:
+        examples = "\n".join(PROMPTS["keywords_extraction_examples"])
+    language = global_config["addon_params"].get(
+        "language", PROMPTS["DEFAULT_LANGUAGE"]
+    )
+
+    # 3. Process conversation history
+    history_context = ""
+    if param.conversation_history:
+        history_context = get_conversation_turns(
+            param.conversation_history, param.history_turns
+        )
+
+    # 4. Build the keyword-extraction prompt
+    kw_prompt = PROMPTS["keywords_extraction_clues"].format(
+        query=text, content_keywords = content_keywords_string, examples=examples, language=language, history=history_context
+    )
+
+    len_of_prompts = len(encode_string_by_tiktoken(kw_prompt))
+    logger.debug(f"[kg_query]Prompt Tokens: {len_of_prompts}")
+
+    # 5. Call the LLM for keyword extraction
+    use_model_func = global_config["llm_model_func"]
+    result = await use_model_func(kw_prompt, keyword_extraction=True)
+
+    # 6. Parse out JSON from the LLM response
+    match = re.search(r"\{.*\}", result, re.DOTALL)
+    if not match:
+        logger.error("No JSON-like structure found in the LLM respond.")
+        return [], []
+    try:
+        keywords_data = json.loads(match.group(0))
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON parsing error: {e}")
+        return [], []
+
+    hl_keywords = keywords_data.get("high_level_keywords", [])
+    ll_keywords = keywords_data.get("low_level_keywords", [])
+
+    # 7. Cache only the processed keywords with cache type
+    if hl_keywords or ll_keywords:
+        cache_data = {
+            "high_level_keywords": hl_keywords,
+            "low_level_keywords": ll_keywords,
+        }
+        await save_to_cache(
+            hashing_kv,
+            CacheData(
+                args_hash=args_hash,
+                content=json.dumps(cache_data),
+                prompt=text,
+                quantized=quantized,
+                min_val=min_val,
+                max_val=max_val,
+                mode=param.mode,
+                cache_type="keywords",
+            ),
+        )
+    return hl_keywords, ll_keywords
+
+async def extract_clues_only(
+    query: str,
+    context: str,
+    keywords: list[str],
+    query_param: QueryParam,
+    global_config: dict[str, str],
+    hashing_kv: BaseKVStorage | None = None,
+    clue_prompt: str | None = None
+) -> list:
+    # Handle clues cache if needed - add cache type for clues
+    args_hash = compute_args_hash(query_param.mode, query, cache_type="clues")
+    cached_clues, quantized, min_val, max_val = await handle_cache(
+        hashing_kv, args_hash, query, query_param.mode, cache_type="clues"
+    )
+    if cached_clues is not None:
+        try:
+            clues = json.loads(cached_clues)
+            return clues["clues"]
+        except (json.JSONDecodeError, KeyError):
+            logger.warning(
+                "Invalid cache format for clues, proceeding with clues extraction"
+            )
+
+    # Extract clues
+    examples = "\n".join(PROMPTS["clues_extraction_examples"])
+    if query_param.mode == ["local_with_clues"]:
+        clue_prompt_temp = clue_prompt if clue_prompt else PROMPTS["clue_extraction"]
+        clue_prompt = clue_prompt_temp.format(
+            query=query, context_data=context, examples=examples,keywords=keywords[0]
+        )
+    elif query_param.mode == ["global_with_clues"]:
+        clue_prompt_temp = clue_prompt if clue_prompt else PROMPTS["clue_extraction"]
+        clue_prompt = clue_prompt_temp.format(
+            query=query, context_data=context, examples=examples,keywords=keywords[1]
+        )
+    else:
+        clue_prompt_temp = clue_prompt if clue_prompt else PROMPTS["clue_extraction"]
+        clue_prompt = clue_prompt_temp.format(
+            query=query, context_data=context, examples=examples, keywords=", ".join(keywords)
+        )
+
+    len_of_prompts = len(encode_string_by_tiktoken(clue_prompt))
+    logger.debug(f"[kg_query]Prompt Tokens: {len_of_prompts}")
+
+    use_model_func = global_config["llm_model_func"]
+    result = await use_model_func(
+        prompt=clue_prompt,
+        stream=query_param.stream,
+    )
+
+    # Parse out JSON from the LLM response
+    match = re.search(r"\{.*\}", result, re.DOTALL)
+    if not match:
+        logger.error("No JSON-like structure found in the LLM respond, clue is empty")
+        return []
+    try:
+        keywords_data = json.loads(match.group(0))
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON parsing error: {e}")
+        return []
+
+    clues = keywords_data.get("clues", [])
+
+    # Cache clues
+    if clues:
+        cache_data = {
+            "clues": clues
+        }
+        await save_to_cache(
+            hashing_kv,
+            CacheData(
+                args_hash=args_hash,
+                content=json.dumps(cache_data),
+                prompt=query,
+                quantized=quantized,
+                min_val=min_val,
+                max_val=max_val,
+                mode=query_param.mode,
+                cache_type="clues",
+            ),
+        )
+    return clues
 
 async def mix_kg_vector_query(
     query: str,
@@ -797,7 +1216,7 @@ async def mix_kg_vector_query(
     """
     # 1. Cache handling
     use_model_func = global_config["llm_model_func"]
-    args_hash = compute_args_hash("mix", query, cache_type="query")
+    args_hash = compute_args_hash(query_param, query, cache_type="query")
     cached_response, quantized, min_val, max_val = await handle_cache(
         hashing_kv, args_hash, query, "mix", cache_type="query"
     )
@@ -1004,6 +1423,31 @@ async def _build_query_context(
             text_chunks_db,
             query_param,
         )
+    elif query_param.mode == "subgraph":
+        entities_context, relations_context, text_units_context = await _subgraph_get_node_data(
+            ll_keywords,
+            knowledge_graph_inst,
+            entities_vdb,
+            relationships_vdb,
+            text_chunks_db,
+            query_param,
+        )
+    elif query_param.mode == "local_with_clues":
+        entities_context, relations_context, text_units_context = await _get_node_data(
+            ll_keywords,
+            knowledge_graph_inst,
+            entities_vdb,
+            text_chunks_db,
+            query_param,
+        )
+    elif query_param.mode == "global_with_clues":
+        entities_context, relations_context, text_units_context = await _get_edge_data(
+            hl_keywords,
+            knowledge_graph_inst,
+            relationships_vdb,
+            text_chunks_db,
+            query_param,
+        )
     else:  # hybrid mode
         ll_data, hl_data = await asyncio.gather(
             _get_node_data(
@@ -1067,6 +1511,7 @@ async def _get_node_data(
     text_chunks_db: BaseKVStorage,
     query_param: QueryParam,
 ):
+    whole_start_time=time.time()
     # get similar entities
     logger.info(
         f"Query nodes: {query}, top_k: {query_param.top_k}, cosine: {entities_vdb.cosine_better_than_threshold}"
@@ -1165,6 +1610,7 @@ async def _get_node_data(
     for i, t in enumerate(use_text_units):
         text_units_section_list.append([i, t["content"]])
     text_units_context = list_of_list_to_csv(text_units_section_list)
+    logger.debug(f"Time taken for _get_node_data: {time.time()-whole_start_time}")
     return entities_context, relations_context, text_units_context
 
 
@@ -1298,6 +1744,305 @@ async def _find_most_related_edges_from_entities(
 
     return all_edges_data
 
+async def _subgraph_get_node_data(
+    query: str,
+    knowledge_graph_inst: BaseGraphStorage,
+    entities_vdb: BaseVectorStorage,
+    relationships_vdb: BaseVectorStorage,
+    text_chunks_db: BaseKVStorage,
+    query_param: QueryParam,
+):
+    whole_start_time=time.time()
+    # get similar entities
+    logger.info(
+        f"Query nodes: {query}, top_k: {query_param.top_k}, cosine: {entities_vdb.cosine_better_than_threshold}"
+    )
+    results = await entities_vdb.query(query, top_k=query_param.top_k)
+    if not len(results):
+        return "", "", ""
+    # get entity information
+    node_datas = await asyncio.gather(
+            *[knowledge_graph_inst.get_node(r["entity_name"]) for r in results]
+        )
+    if not all([n is not None for n in node_datas]):
+        logger.warning("Some nodes are missing, maybe the storage is damaged")
+
+    get_subgraph_start_time=time.time()
+    name_in_result=[r["entity_name"] for r in results]
+    target_nodes=set(name_in_result)
+    subgraph=await knowledge_graph_inst.get_smallest_subgraph(target_nodes)
+    if not subgraph:
+        logger.warning("No valid nodes,  maybe the storage is damaged")
+        return "", "", ""
+    subgraph_nodes=subgraph.nodes
+    subgraph_edges=subgraph.edges
+    logger.info(
+        f"Get subgraph with {len(subgraph_nodes)} nodes, {len(subgraph_edges)} edges"
+    )
+    logger.debug(f"Get subgraph time: {time.time()-get_subgraph_start_time}")
+
+    # save subgraph to graphml file
+    # import networkx as nx
+    # tmp_g=nx.Graph()
+    # tmp_g.add_nodes_from(subgraph_nodes)
+    # tmp_g.add_edges_from(subgraph_edges)
+    # nx.write_graphml(tmp_g,"/home/csh/code/LightRAG/cstest_qwen2.5/subgraph.graphml")
+
+    logger.info(
+        f"Query subgraph edges: {query}, top_k: {query_param.top_k*3}, cosine: {relationships_vdb.cosine_better_than_threshold}"
+    )
+    prune_start_time=time.time()
+    edges_result=await relationships_vdb.query(query, top_k=query_param.top_k*3)
+    if not len(edges_result):
+        logger.info("No relevant edges found in subgraph, keep all edges")
+    else:
+        maybe_edges=set()
+        for e_res in edges_result:
+            e=tuple(sorted((e_res["src_id"],e_res["tgt_id"])))
+            if  e in subgraph_edges:
+                maybe_edges.add(e)
+        subgraph_edges=list(maybe_edges)
+
+
+        # filter isolated nodes if nodes not in target_nodes and in maybe_nodes
+        maybe_nodes={node for edge in subgraph_edges for node in edge}
+        subgraph_nodes=[n for n in subgraph_nodes if (n in maybe_nodes) or (n in target_nodes)]
+
+    logger.debug(f"Prune subgraph time: {time.time()-prune_start_time}")
+
+    node_datas=await asyncio.gather(
+        *[knowledge_graph_inst.get_node(n) for n in subgraph_nodes]
+    )
+    node_degrees=await asyncio.gather(
+        *[knowledge_graph_inst.node_degree(n) for n in subgraph_nodes]
+    )
+
+    node_datas = [
+        {**n, "entity_name": k, "rank": d}
+        for k, n, d in zip(subgraph_nodes, node_datas, node_degrees)
+        if n is not None
+    ]  # what is this text_chunks_db doing.  dont remember it in airvx.  check the diagram.
+    # get entitytext chunk
+    get_text_start_time=time.time()
+    use_text_units, use_relations = await asyncio.gather(
+        _find_most_related_text_unit_from_subgraph_entities(
+            node_datas, subgraph_edges,query_param, text_chunks_db, knowledge_graph_inst
+        ),
+        _find_most_related_edges_from_subgraph_entities(
+            node_datas,subgraph_edges, query_param, knowledge_graph_inst
+        ),
+    )
+    logger.debug(f"Get text time: {time.time()-get_text_start_time}")
+    len_node_datas = len(node_datas)
+    node_datas = truncate_list_by_token_size(
+        node_datas,
+        key=lambda x: x["description"],
+        max_token_size=query_param.max_token_for_local_context,
+    )
+    logger.debug(
+        f"Truncate entities from {len_node_datas} to {len(node_datas)} (max tokens:{query_param.max_token_for_local_context})"
+    )
+
+    logger.info(
+        f"Subgraph query uses {len(node_datas)} entities, {len(use_relations)} relations, {len(use_text_units)} chunks"
+    )
+
+    # build prompt
+    entites_section_list = [["id", "entity", "type", "description", "rank"]]
+    for i, n in enumerate(node_datas):
+        entites_section_list.append(
+            [
+                i,
+                n["entity_name"],
+                n.get("entity_type", "UNKNOWN"),
+                n.get("description", "UNKNOWN"),
+                n["rank"],
+            ]
+        )
+    entities_context = list_of_list_to_csv(entites_section_list)
+
+    relations_section_list = [
+        [
+            "id",
+            "source",
+            "target",
+            "description",
+            "keywords",
+            "weight",
+            "rank",
+            "created_at",
+        ]
+    ]
+    for i, e in enumerate(use_relations):
+        created_at = e.get("created_at", "UNKNOWN")
+        # Convert timestamp to readable format
+        if isinstance(created_at, (int, float)):
+            created_at = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(created_at))
+        relations_section_list.append(
+            [
+                i,
+                e["src_tgt"][0],
+                e["src_tgt"][1],
+                e["description"],
+                e["keywords"],
+                e["weight"],
+                e["rank"],
+                created_at,
+            ]
+        )
+    relations_context = list_of_list_to_csv(relations_section_list)
+
+    text_units_section_list = [["id", "content"]]
+    for i, t in enumerate(use_text_units):
+        text_units_section_list.append([i, t["content"]])
+    text_units_context = list_of_list_to_csv(text_units_section_list)
+    logger.debug(f"Whole subgraph query time: {time.time()-whole_start_time}")
+    return entities_context, relations_context, text_units_context
+
+async def _find_most_related_text_unit_from_subgraph_entities(
+    node_datas: list[dict],
+    subgraph_edges: list[tuple],
+    query_param: QueryParam,
+    text_chunks_db: BaseKVStorage,
+    knowledge_graph_inst: BaseGraphStorage,
+):
+    text_units = [
+        split_string_by_multi_markers(dp["source_id"], [GRAPH_FIELD_SEP])
+        for dp in node_datas
+    ]
+    edges = await asyncio.gather(
+        *[knowledge_graph_inst.get_node_edges(dp["entity_name"]) for dp in node_datas]
+    )
+    all_one_hop_nodes = set()
+    for this_edges in edges:
+        if not this_edges:
+            continue
+        all_one_hop_nodes.update([e[1] for e in this_edges])
+
+    all_one_hop_nodes = list(all_one_hop_nodes)
+    all_one_hop_nodes_data = await asyncio.gather(
+        *[knowledge_graph_inst.get_node(e) for e in all_one_hop_nodes]
+    )
+
+    # Add null check for node data
+    all_one_hop_text_units_lookup = {
+        k: set(split_string_by_multi_markers(v["source_id"], [GRAPH_FIELD_SEP]))
+        for k, v in zip(all_one_hop_nodes, all_one_hop_nodes_data)
+        if v is not None and "source_id" in v  # Add source_id check
+    }
+
+
+    edges={node_datas[idx]["entity_name"]:edges[idx] for idx in range(len(node_datas))}
+    subgraph_edge_datas= await asyncio.gather(
+        *[knowledge_graph_inst.get_edge(e[0],e[1]) for e in subgraph_edges]
+    )
+    text_units=[split_string_by_multi_markers(dp["source_id"], [GRAPH_FIELD_SEP])
+        for dp in subgraph_edge_datas]
+    to_check_source=defaultdict(set)
+    for idx,sublist in enumerate(text_units):
+        for c_id in sublist:
+            to_check_source[c_id].add(subgraph_edges[idx][0])
+            to_check_source[c_id].add(subgraph_edges[idx][1])
+    
+      
+    all_text_units_lookup = {}
+    tasks = []
+    for c_id in to_check_source.keys():
+        to_check_edges=[]
+        for node_name in to_check_source[c_id]:
+            to_check_edges.extend(edges[node_name])
+        tasks.append((c_id,to_check_edges))
+
+    results = await asyncio.gather(
+        *[text_chunks_db.get_by_id(c_id) for c_id, _ in tasks]
+    )
+
+    for (c_id, this_edges), data in zip(tasks, results):
+        all_text_units_lookup[c_id] = {
+            "data": data,
+            "relation_counts": 0,
+        }
+
+        if this_edges:
+            for e in this_edges:
+                if (
+                    e[1] in all_one_hop_text_units_lookup
+                    and c_id in all_one_hop_text_units_lookup[e[1]]
+                ):
+                    all_text_units_lookup[c_id]["relation_counts"] += 1
+
+    # Filter out None values and ensure data has content
+    all_text_units = [
+        {"id": k, **v}
+        for k, v in all_text_units_lookup.items()
+        if v is not None and v.get("data") is not None and "content" in v["data"]
+    ]
+
+    if not all_text_units:
+        logger.warning("No valid text units found")
+        return []
+
+    all_text_units = sorted(
+        all_text_units, key=lambda x: (-x["relation_counts"])
+    )
+
+    all_text_units = truncate_list_by_token_size(
+        all_text_units,
+        key=lambda x: x["data"]["content"],
+        max_token_size=query_param.max_token_for_text_unit,
+    )
+
+    logger.debug(
+        f"Truncate chunks from {len(all_text_units_lookup)} to {len(all_text_units)} (max tokens:{query_param.max_token_for_text_unit})"
+    )
+
+    all_text_units = [t["data"] for t in all_text_units]
+    return all_text_units
+
+async def _find_most_related_edges_from_subgraph_entities(
+    node_datas: list[dict],
+    subgraph_edges: list[tuple],
+    query_param: QueryParam,
+    knowledge_graph_inst: BaseGraphStorage,
+):
+    all_related_edges = await asyncio.gather(
+        *[knowledge_graph_inst.get_node_edges(dp["entity_name"]) for dp in node_datas]
+    )
+    all_edges = list(subgraph_edges)
+    seen = set(subgraph_edges)
+
+    for this_edges in all_related_edges:
+        for e in this_edges:
+            sorted_edge = tuple(sorted(e))
+            if sorted_edge not in seen:
+                seen.add(sorted_edge)
+                all_edges.append(sorted_edge)
+
+    all_edges_pack, all_edges_degree = await asyncio.gather(
+        asyncio.gather(*[knowledge_graph_inst.get_edge(e[0], e[1]) for e in all_edges]),
+        asyncio.gather(
+            *[knowledge_graph_inst.edge_degree(e[0], e[1]) for e in all_edges]
+        ),
+    )
+    all_edges_data = [
+        {"src_tgt": k, "rank": d, **v}
+        for k, v, d in zip(all_edges, all_edges_pack, all_edges_degree)
+        if v is not None
+    ]
+    all_edges_data = sorted(
+        all_edges_data, key=lambda x: (x["rank"], x["weight"]), reverse=True
+    )
+    all_edges_data = truncate_list_by_token_size(
+        all_edges_data,
+        key=lambda x: x["description"],
+        max_token_size=query_param.max_token_for_global_context,
+    )
+
+    logger.debug(
+        f"Truncate relations from {len(all_edges)} to {len(all_edges_data)} (max tokens:{query_param.max_token_for_global_context})"
+    )
+
+    return all_edges_data
 
 async def _get_edge_data(
     keywords,
@@ -1306,6 +2051,7 @@ async def _get_edge_data(
     text_chunks_db: BaseKVStorage,
     query_param: QueryParam,
 ):
+    whole_start_time=time.time()
     logger.info(
         f"Query edges: {keywords}, top_k: {query_param.top_k}, cosine: {relationships_vdb.cosine_better_than_threshold}"
     )
@@ -1405,6 +2151,7 @@ async def _get_edge_data(
     for i, t in enumerate(use_text_units):
         text_units_section_list.append([i, t["content"]])
     text_units_context = list_of_list_to_csv(text_units_section_list)
+    logger.debug(f"Time taken for _get_edge_data: {time.time()-whole_start_time}")
     return entities_context, relations_context, text_units_context
 
 
@@ -1546,7 +2293,7 @@ async def naive_query(
 ) -> str | AsyncIterator[str]:
     # Handle cache
     use_model_func = global_config["llm_model_func"]
-    args_hash = compute_args_hash(query_param.mode, query, cache_type="query")
+    args_hash = compute_args_hash(query_param, query, cache_type="query")
     cached_response, quantized, min_val, max_val = await handle_cache(
         hashing_kv, args_hash, query, query_param.mode, cache_type="query"
     )
@@ -1663,7 +2410,7 @@ async def kg_query_with_keywords(
     # 1) Handle potential cache for query results
     # ---------------------------
     use_model_func = global_config["llm_model_func"]
-    args_hash = compute_args_hash(query_param.mode, query, cache_type="query")
+    args_hash = compute_args_hash(query_param, query, cache_type="query")
     cached_response, quantized, min_val, max_val = await handle_cache(
         hashing_kv, args_hash, query, query_param.mode, cache_type="query"
     )
@@ -1781,3 +2528,21 @@ async def kg_query_with_keywords(
         ),
     )
     return response
+
+def combine_keywords_clues(base: str, addition: str) -> str:
+    if base and addition:
+        return f"{base}, {addition}"
+    return base or addition  
+
+def extract_entity_relationship_from_context(text):
+    # 定义模式来匹配完整的Entities和Relationships部分
+    pattern = r"(-----Entities-----\s+```csv\s+.*?```\s+-----Relationships-----\s+```csv\s+.*?```)"
+
+    # 使用re.DOTALL使点(.)也能匹配换行符
+    match = re.search(pattern, text, re.DOTALL)
+
+    if match:
+        # 返回整个匹配的文本
+        return match.group(1)
+    else:
+        return None
