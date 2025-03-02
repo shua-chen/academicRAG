@@ -66,4 +66,7 @@ tmp.*
 tmp_file/
 lib/
 cs_test/
+datasets/
+cstest*/
+test_*/
 

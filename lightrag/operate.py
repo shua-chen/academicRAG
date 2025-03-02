@@ -1448,6 +1448,41 @@ async def _build_query_context(
             text_chunks_db,
             query_param,
         )
+    elif query_param.mode == "hybrid_subgraph" or query_param.mode == "subgraph_with_clues":
+        ll_data, hl_data = await asyncio.gather(
+            _subgraph_get_node_data(
+                ll_keywords,
+                knowledge_graph_inst,
+                entities_vdb,
+                text_chunks_db,
+                query_param,
+            ),
+            _get_edge_data(
+                hl_keywords,
+                knowledge_graph_inst,
+                relationships_vdb,
+                text_chunks_db,
+                query_param,
+            ),
+        )
+
+        (
+            ll_entities_context,
+            ll_relations_context,
+            ll_text_units_context,
+        ) = ll_data
+
+        (
+            hl_entities_context,
+            hl_relations_context,
+            hl_text_units_context,
+        ) = hl_data
+
+        entities_context, relations_context, text_units_context = combine_contexts(
+            [hl_entities_context, ll_entities_context],
+            [hl_relations_context, ll_relations_context],
+            [hl_text_units_context, ll_text_units_context],
+        )
     else:  # hybrid mode
         ll_data, hl_data = await asyncio.gather(
             _get_node_data(

@@ -59,9 +59,9 @@ def extract_unique_contexts(input_directory, output_directory):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-i", "--input_dir", type=str, default="../datasets")
+    parser.add_argument("-i", "--input_dir", type=str, default="./datasets")
     parser.add_argument(
-        "-o", "--output_dir", type=str, default="../datasets/unique_contexts"
+        "-o", "--output_dir", type=str, default="./datasets/unique_contexts"
     )
 
     args = parser.parse_args()

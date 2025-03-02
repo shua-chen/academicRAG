@@ -997,7 +997,7 @@ class LightRAG:
         Returns:
             str: The result of the query execution.
         """
-        if param.mode in ["local", "global", "hybrid","subgraph"]:
+        if param.mode in ["local", "global", "hybrid","subgraph","hybrid_subgraph"]:
             response = await kg_query(
                 query,
                 self.chunk_entity_relation_graph,
@@ -1018,7 +1018,7 @@ class LightRAG:
                 ),
                 system_prompt=system_prompt,
             )
-        elif param.mode in ["local_with_clues", "global_with_clues", "hybrid_with_clues"]:
+        elif param.mode in ["local_with_clues", "global_with_clues", "hybrid_with_clues","subgraph_with_clues"]:
             response = await kg_query_with_clues(
                 query,
                 self.chunk_entity_relation_graph,
