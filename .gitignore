@@ -63,10 +63,12 @@ gui/
 
 tmp.*
 *.html
-tmp_file/
+tmp*
 lib/
 cs_test/
 datasets/
 cstest*/
 test_*/
+examples
+reproduce
 
