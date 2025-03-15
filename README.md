@@ -1,11 +1,12 @@
-<center><h2>📚 AcademicRAG: Fast, Simple, Accurate Graph based RAG Framework for Academic and General Texts</h2></center>
+<center><h2>📚 AcademicRAG: More Efficient and Reliable Graph based RAG for Academic and General Texts Search</h2></center>
 <div align="center">
 
 
 <div align="center">
-This repository hosts the code of AcademicRAG. The structure of this code is based on <a href="https://github.com/HKUDS/LightRAG">LightRAG</a> and <a href="https://github.com/gusye1234/nano-graphrag">nano-graphrag</a>.
+This repository hosts the code of AcademicRAG. The structure of this code is based on <a href="https://github.com/HKUDS/LightRAG">LightRAG</a>.
 
-<img src="https://postimg.cc/yDySqZ7G" width="800" alt="AcademicRAG Framework Flowchart">
+<img src="https://i.postimg.cc/7Zp123dq/Academic-RAG-1.png" width="800" alt="AcademicRAG Framework Flowchart">
+The Algorithm Flowchart of AcademicRAG
 </div>
 </div>
 
@@ -46,15 +47,15 @@ rag = AcademicRAG(
 # Insert text
 rag.insert("Your text")
 
-# Perform naive search
+# Perform naive rag search
 mode="naive"
-# Perform local search
-mode="local"
+# Perform subgraph(local) search
+mode="subgraph"
 # Perform global search
 mode="global"
-# Perform hybrid search
+# Perform hybrid(subgraph+global) search
 mode="hybrid"
-# Mix mode Integrates knowledge graph and vector retrieval.
+# Mix mode Integrates knowledge graph and vector retrieval(naive+hybrid).
 mode="mix"
 
 rag.query(
@@ -67,11 +68,11 @@ rag.query(
 
 ```python
 class QueryParam:
-    mode: Literal["local", "global", "hybrid", "naive", "mix"] = "global"
+    mode: Literal["subgraph", "global", "hybrid", "naive", "mix"] = "global"
     """Specifies the retrieval mode:
-    - "local": Focuses on context-dependent information.
+    - "subgraph": Focuses on context-dependent information.
     - "global": Utilizes global knowledge.
-    - "hybrid": Combines local and global retrieval methods.
+    - "hybrid": Combines subgraph and global retrieval methods.
     - "naive": Performs a basic search without advanced techniques.
     - "mix": Integrates knowledge graph and vector retrieval. Mix mode combines knowledge graph and vector search:
         - Uses both structured (KG) and unstructured (vector) information
@@ -84,13 +85,13 @@ class QueryParam:
     response_type: str = "Multiple Paragraphs"
     """Defines the response format. Examples: 'Multiple Paragraphs', 'Single Paragraph', 'Bullet Points'."""
     top_k: int = 60
-    """Number of top items to retrieve. Represents entities in 'local' mode and relationships in 'global' mode."""
+    """Number of top items to retrieve. Represents entities in 'subgraph' mode and relationships in 'global' mode."""
     max_token_for_text_unit: int = 4000
     """Maximum number of tokens allowed for each retrieved text chunk."""
     max_token_for_global_context: int = 4000
     """Maximum number of tokens allocated for relationship descriptions in global retrieval."""
-    max_token_for_local_context: int = 4000
-    """Maximum number of tokens allocated for entity descriptions in local retrieval."""
+    max_token_for_subgraph_context: int = 4000
+    """Maximum number of tokens allocated for entity descriptions in subgraph retrieval."""
     ...
 ```
 
@@ -299,7 +300,7 @@ conversation_history = [
 
 # Create query parameters with conversation history
 query_param = QueryParam(
-    mode="mix",  # or any other mode: "local", "global", "hybrid"
+    mode="mix",  # or any other mode: "subgraph", "global", "hybrid"
     conversation_history=conversation_history,  # Add the conversation history
     history_turns=3  # Number of recent conversation turns to consider
 )
@@ -326,7 +327,7 @@ rag = AcademicRAG(working_dir=WORKING_DIR)
 
 # Create query parameters
 query_param = QueryParam(
-    mode="hybrid",  # or other mode: "local", "global", "hybrid", "mix" and "naive"
+    mode="hybrid",  # or other mode: "subgraph", "global", "hybrid", "mix" and "naive"
 )
 
 # Example 1: Using the default system prompt
