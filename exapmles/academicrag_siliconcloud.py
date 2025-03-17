@@ -1,0 +1,71 @@
+import os
+import asyncio
+from academicrag import AcademicRAG, QueryParam
+from academicrag.llm.openai import openai_complete_if_cache
+from academicrag.llm.siliconcloud import siliconcloud_embedding
+from academicrag.utils import EmbeddingFunc
+import numpy as np
+
+WORKING_DIR = "./test"
+
+os.environ["SILICONFLOW_API_KEY"] = "YOUR_API_KEY"
+
+if not os.path.exists(WORKING_DIR):
+    os.mkdir(WORKING_DIR)
+
+
+async def llm_model_func(
+    prompt, system_prompt=None, history_messages=[], keyword_extraction=False, **kwargs
+) -> str:
+    return await openai_complete_if_cache(
+        "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B",
+        prompt,
+        system_prompt=system_prompt,
+        history_messages=history_messages,
+        api_key=os.getenv("SILICONFLOW_API_KEY"),
+        base_url="https://api.siliconflow.cn/v1/",
+        **kwargs,
+    )
+
+
+async def embedding_func(texts: list[str]) -> np.ndarray:
+    return await siliconcloud_embedding(
+        texts,
+        model="BAAI/bge-m3",
+        api_key=os.getenv("SILICONFLOW_API_KEY"),
+        max_token_size=8196,
+    )
+
+
+
+rag = AcademicRAG(
+    working_dir=WORKING_DIR,
+    llm_model_func=llm_model_func,
+    embedding_func=EmbeddingFunc(
+        embedding_dim=1024, max_token_size=8196, func=embedding_func
+    ),
+)
+
+
+with open("academicRAG\exapmles\data\machine_learning.txt") as f:
+    rag.insert(f.read())
+
+# # Perform naive search
+# print(
+#     rag.query("What are the top themes in this story?", param=QueryParam(mode="naive"))
+# )
+
+# # Perform local search
+# print(
+#     rag.query("What are the top themes in this story?", param=QueryParam(mode="subgraph"))
+# )
+
+# # Perform global search
+# print(
+#     rag.query("What are the top themes in this story?", param=QueryParam(mode="global"))
+# )
+
+# Perform hybrid search
+print(
+    rag.query("What is the histry of machine learning?", param=QueryParam(mode="hybrid"))
+)
