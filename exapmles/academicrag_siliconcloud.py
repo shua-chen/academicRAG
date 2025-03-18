@@ -47,7 +47,7 @@ rag = AcademicRAG(
 )
 
 
-with open("academicRAG\exapmles\data\machine_learning.txt") as f:
+with open("academicRAG\exapmles\data\machine_learning.txt", encoding="utf-8") as f:
     rag.insert(f.read())
 
 # # Perform naive search

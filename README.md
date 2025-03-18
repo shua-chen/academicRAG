@@ -20,14 +20,39 @@ cd academicRAG
 pip install -e .
 ```
 
+<details>
+  <summary><b>common problem</b></summary>
+
+Error 1:
+```bash
+ModuleNotFoundError: No module named 'tqdm'
+```
+
+Solution:
+```bash
+pip install tqdm
+```
+
+Error 2:
+```bash
+ModuleNotFoundError: No module named 'past'
+```
+
+Solution:
+```bash
+pip install future
+```
+</details>
 
 ## Quick Start
 * All the code can be found in the `examples`.
-* Set OpenAI API key in environment if using OpenAI models: `export OPENAI_API_KEY="sk-...".`
+* You can try `examples/academicrag_openai_quick_start.py` for a simple and fast start.
+* Before using `examples/academicrag_openai_quick_start.py`, you need to set OpenAI API key in environment (E.g. `export OPENAI_API_KEY="sk-...".`). 
 * Download the demo text "A Christmas Carol by Charles Dickens":
 ```bash
 curl https://raw.githubusercontent.com/gusye1234/nano-graphrag/main/tests/mock_data.txt > ./book.txt
-```
+``` 
+* You can also try other tiny text file in `examples/data` for a quick start.
 
 ## Query
 
@@ -519,9 +544,30 @@ await rag.apipeline_process_enqueue_documents(input)
 </details>
 
 <details>
-  <summary><b>Insert Multi-file Type Support</b></summary>
+  <summary><b>Insert Multi-type File Support</b></summary>
 
-The `textract` supports reading file types such as TXT, DOCX, PPTX, CSV, and PDF.
+Any python tool that can convert the file types to TXT could be the solution for inserting multi-type file. For example:
+
+1. pdfminer for PDF file
+```python
+from pdfminer.high_level import extract_text
+
+text = extract_text("example.pdf")
+rag.insert(text)
+```
+
+2. html2txt for HTML file
+```python
+import html2text
+
+h = html2text.HTML2Text()
+h.ignore_links = True
+h.ignore_images = True
+with open("example.html", encoding="utf-8") as f:
+    rag.insert(h.handle(f).read())
+```
+
+The `textract` supports reading file types such as TXT, DOCX, PPTX, CSV, and PDF. But it could lead to some potential environment error. (Not recommand)
 
 ```python
 import textract
@@ -532,6 +578,7 @@ text_content = textract.process(file_path)
 rag.insert(text_content.decode('utf-8'))
 ```
 </details>
+
 
 ## Storage
 
