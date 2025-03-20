@@ -6,6 +6,7 @@
 This repository hosts the code of AcademicRAG. The structure of this code is based on <a href="https://github.com/HKUDS/LightRAG">LightRAG</a>.
 
 <img src="https://i.postimg.cc/7Zp123dq/Academic-RAG-1.png" width="800" alt="AcademicRAG Framework Flowchart">
+
 The Algorithm Flowchart of AcademicRAG
 </div>
 </div>
@@ -715,11 +716,6 @@ The API includes comprehensive error handling:
 - Processing errors (500)
 - Supports multiple file encodings (UTF-8 and GBK)
 </details>
-
-## API
-AcademicRAG can be installed with API support to serve a Fast api interface to perform data upload and indexing/Rag operations/Rescan of the input folder etc..
-
-[AcademicRAG API](AcademicRAG/api/README.md)
 
 ## Graph Visualization
 
