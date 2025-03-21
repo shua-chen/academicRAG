@@ -26,7 +26,7 @@ class DataPipe:
         self.logger.addHandler(handler)
         self.logger.info("DataPipe created")
 
-    def load_input(self, path: str) -> List[str]:
+    def load_input(self, path: str,return_paths: bool=False) -> List[str]:
         all_files=[]
         
         if os.path.isdir(path):
@@ -39,6 +39,7 @@ class DataPipe:
         self.logger.info(f"Detecting {len(all_files)} files")
 
         extracted_texts=[]
+        self.tmp_file_paths=[]
         
         
         loop=always_get_an_event_loop()
@@ -46,10 +47,14 @@ class DataPipe:
         extracted_texts = loop.run_until_complete(
             tqdm_asyncio.gather(*tasks, desc="Extracting", total=len(tasks))
         )
-        return extracted_texts
+        if return_paths:
+            return extracted_texts, self.tmp_file_paths
+        else:
+            return extracted_texts
     
     async def ahandle_single_file(self, path: str) -> List[str]:
         file_type = path.split(".")[-1]
+        self.tmp_file_paths.append(path)
         try:
             if file_type == "pdf":
                 return await self.handle_pdf(path)
@@ -63,6 +68,7 @@ class DataPipe:
                 return await self.handle_with_textract(path)
         except Exception as e:
             self.logger.error(f"Error while extracting text from {path}: {e}")
+            self.tmp_file_paths.remove(path)
             return []
         
     async def handle_pdf(self, path: str) -> List[Any]:
