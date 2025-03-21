@@ -36,7 +36,7 @@ export default function QuerySettings() {
               <Text
                 className="ml-1"
                 text="Query Mode"
-                tooltip="Select the retrieval strategy:\n• Naive: Basic search without advanced techniques\n• Local: Context-dependent information retrieval\n• Global: Utilizes global knowledge base\n• Hybrid: Combines local and global retrieval\n• Mix: Integrates knowledge graph with vector retrieval"
+                tooltip="Select the retrieval strategy:\n• Naive: Basic search without advanced techniques\n• Local: Context-dependent information retrieval\n• Global: Utilizes global knowledge base\n• Hybrid: Combines subgraph and global retrieval\n• Mix: Integrates knowledge graph with vector retrieval"
                 side="left"
               />
               <Select
@@ -49,7 +49,7 @@ export default function QuerySettings() {
                 <SelectContent>
                   <SelectGroup>
                     <SelectItem value="naive">Naive</SelectItem>
-                    <SelectItem value="local">Local</SelectItem>
+                    <SelectItem value="subgraph">Subgraph</SelectItem>
                     <SelectItem value="global">Global</SelectItem>
                     <SelectItem value="hybrid">Hybrid</SelectItem>
                     <SelectItem value="mix">Mix</SelectItem>
@@ -88,7 +88,7 @@ export default function QuerySettings() {
               <Text
                 className="ml-1"
                 text="Top K Results"
-                tooltip="Number of top items to retrieve. Represents entities in 'local' mode and relationships in 'global' mode"
+                tooltip="Number of top items to retrieve. Represents entities in 'subgraph' mode and relationships in 'global' mode"
                 side="left"
               />
               <NumberInput
@@ -140,7 +140,7 @@ export default function QuerySettings() {
                 <Text
                   className="ml-1"
                   text="Max Tokens for Local Context"
-                  tooltip="Maximum number of tokens allocated for entity descriptions in local retrieval"
+                  tooltip="Maximum number of tokens allocated for entity descriptions in subgraph retrieval"
                   side="left"
                 />
                 <NumberInput

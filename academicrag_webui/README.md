@@ -1,6 +1,6 @@
-# LightRAG WebUI
+# AcademicRAG WebUI
 
-LightRAG WebUI is a React-based web interface for interacting with the LightRAG system. It provides a user-friendly interface for querying, managing, and exploring LightRAG's functionalities.
+AcademicRAG WebUI is a React-based web interface for interacting with the AcademicRAG system. It provides a user-friendly interface for querying, managing, and exploring AcademicRAG's functionalities.
 
 ## Installation
 
@@ -10,7 +10,7 @@ LightRAG WebUI is a React-based web interface for interacting with the LightRAG 
 
 2.  **Install Dependencies:**
 
-    In the `lightrag_webui` directory, run the following command to install project dependencies:
+    In the `academicrag_webui` directory, run the following command to install project dependencies:
 
     ```bash
     bun install --frozen-lockfile
@@ -24,7 +24,7 @@ LightRAG WebUI is a React-based web interface for interacting with the LightRAG 
     bun run build --emptyOutDir
     ```
 
-    This command will bundle the project and output the built files to the `lightrag/api/webui` directory.
+    This command will bundle the project and output the built files to the `academicrag/api/webui` directory.
 
 ## Development
 

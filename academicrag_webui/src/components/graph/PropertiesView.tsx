@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useGraphStore, RawNodeType, RawEdgeType } from '@/stores/graph'
 import Text from '@/components/ui/Text'
-import useLightragGraph from '@/hooks/useLightragGraph'
+import useAcademicragGraph from '@/hooks/useAcademicragGraph'
 
 /**
  * Component that view properties of elements in graph.
  */
 const PropertiesView = () => {
-  const { getNode, getEdge } = useLightragGraph()
+  const { getNode, getEdge } = useAcademicragGraph()
   const selectedNode = useGraphStore.use.selectedNode()
   const focusedNode = useGraphStore.use.focusedNode()
   const selectedEdge = useGraphStore.use.selectedEdge()

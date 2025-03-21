@@ -4,13 +4,13 @@ import { errorMessage } from '@/lib/utils'
 import { useSettingsStore } from '@/stores/settings'
 
 // Types
-export type LightragNodeType = {
+export type AcademicragNodeType = {
   id: string
   labels: string[]
   properties: Record<string, any>
 }
 
-export type LightragEdgeType = {
+export type AcademicragEdgeType = {
   id: string
   source: string
   target: string
@@ -18,12 +18,12 @@ export type LightragEdgeType = {
   properties: Record<string, any>
 }
 
-export type LightragGraphType = {
-  nodes: LightragNodeType[]
-  edges: LightragEdgeType[]
+export type AcademicragGraphType = {
+  nodes: AcademicragNodeType[]
+  edges: AcademicragEdgeType[]
 }
 
-export type LightragStatus = {
+export type AcademicragStatus = {
   status: 'healthy'
   working_directory: string
   input_directory: string
@@ -42,7 +42,7 @@ export type LightragStatus = {
   }
 }
 
-export type LightragDocumentsScanProgress = {
+export type AcademicragDocumentsScanProgress = {
   is_scanning: boolean
   current_file: string
   indexed_count: number
@@ -53,12 +53,12 @@ export type LightragDocumentsScanProgress = {
 /**
  * Specifies the retrieval mode:
  * - "naive": Performs a basic search without advanced techniques.
- * - "local": Focuses on context-dependent information.
+ * - "subgraph": Focuses on context-dependent information.
  * - "global": Utilizes global knowledge.
- * - "hybrid": Combines local and global retrieval methods.
+ * - "hybrid": Combines subgraph and global retrieval methods.
  * - "mix": Integrates knowledge graph and vector retrieval.
  */
-export type QueryMode = 'naive' | 'local' | 'global' | 'hybrid' | 'mix'
+export type QueryMode = 'naive' | 'subgraph' | 'global' | 'hybrid' | 'mix'
 
 export type Message = {
   role: 'user' | 'assistant' | 'system'
@@ -77,13 +77,13 @@ export type QueryRequest = {
   response_type?: string
   /** If True, enables streaming output for real-time responses. */
   stream?: boolean
-  /** Number of top items to retrieve. Represents entities in 'local' mode and relationships in 'global' mode. */
+  /** Number of top items to retrieve. Represents entities in 'subgraph' mode and relationships in 'global' mode. */
   top_k?: number
   /** Maximum number of tokens allowed for each retrieved text chunk. */
   max_token_for_text_unit?: number
   /** Maximum number of tokens allocated for relationship descriptions in global retrieval. */
   max_token_for_global_context?: number
-  /** Maximum number of tokens allocated for entity descriptions in local retrieval. */
+  /** Maximum number of tokens allocated for entity descriptions in subgraph retrieval. */
   max_token_for_local_context?: number
   /** List of high-level keywords to prioritize in retrieval. */
   hl_keywords?: string[]
@@ -161,7 +161,7 @@ axiosInstance.interceptors.response.use(
 )
 
 // API methods
-export const queryGraphs = async (label: string): Promise<LightragGraphType> => {
+export const queryGraphs = async (label: string): Promise<AcademicragGraphType> => {
   const response = await axiosInstance.get(`/graphs?label=${label}`)
   return response.data
 }
@@ -172,7 +172,7 @@ export const getGraphLabels = async (): Promise<string[]> => {
 }
 
 export const checkHealth = async (): Promise<
-  LightragStatus | { status: 'error'; message: string }
+  AcademicragStatus | { status: 'error'; message: string }
 > => {
   try {
     const response = await axiosInstance.get('/health')
@@ -195,7 +195,7 @@ export const scanNewDocuments = async (): Promise<{ status: string }> => {
   return response.data
 }
 
-export const getDocumentsScanProgress = async (): Promise<LightragDocumentsScanProgress> => {
+export const getDocumentsScanProgress = async (): Promise<AcademicragDocumentsScanProgress> => {
   const response = await axiosInstance.get('/documents/scan-progress')
   return response.data
 }

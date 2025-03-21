@@ -58,7 +58,7 @@ ignore_this.txt
 # Project-specific files
 dickens/
 book.txt
-lightrag-dev/
+academicrag-dev/
 gui/
 
 tmp.*
@@ -70,4 +70,5 @@ datasets/
 cstest*/
 test_*/
 reproduce
+academicrag.service
 

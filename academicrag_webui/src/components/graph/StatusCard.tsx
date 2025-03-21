@@ -1,6 +1,6 @@
-import { LightragStatus } from '@/api/academicrag'
+import { AcademicragStatus } from '@/api/academicrag'
 
-const StatusCard = ({ status }: { status: LightragStatus | null }) => {
+const StatusCard = ({ status }: { status: AcademicragStatus | null }) => {
   if (!status) {
     return <div className="text-muted-foreground text-sm">Status information unavailable</div>
   }

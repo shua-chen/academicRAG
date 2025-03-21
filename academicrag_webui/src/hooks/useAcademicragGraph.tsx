@@ -202,7 +202,7 @@ const useLightrangeGraph = () => {
     }
   }, [queryLabel])
 
-  const lightrageGraph = useCallback(() => {
+  const academicrageGraph = useCallback(() => {
     if (sigmaGraph) {
       return sigmaGraph as Graph<NodeType, EdgeType>
     }
@@ -211,7 +211,7 @@ const useLightrangeGraph = () => {
     return graph as Graph<NodeType, EdgeType>
   }, [sigmaGraph])
 
-  return { lightrageGraph, getNode, getEdge }
+  return { academicrageGraph, getNode, getEdge }
 }
 
 export default useLightrangeGraph

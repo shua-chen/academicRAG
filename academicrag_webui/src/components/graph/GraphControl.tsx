@@ -4,7 +4,7 @@ import { useLayoutForceAtlas2 } from '@react-sigma/layout-forceatlas2'
 import { useEffect } from 'react'
 
 // import useRandomGraph, { EdgeType, NodeType } from '@/hooks/useRandomGraph'
-import useLightragGraph, { EdgeType, NodeType } from '@/hooks/useLightragGraph'
+import useAcademicragGraph, { EdgeType, NodeType } from '@/hooks/useAcademicragGraph'
 import useTheme from '@/hooks/useTheme'
 import * as Constants from '@/lib/constants'
 
@@ -21,7 +21,7 @@ const isButtonPressed = (ev: MouseEvent | TouchEvent) => {
 }
 
 const GraphControl = ({ disableHoverEffect }: { disableHoverEffect?: boolean }) => {
-  const { lightrageGraph } = useLightragGraph()
+  const { academicrageGraph } = useAcademicragGraph()
   const sigma = useSigma<NodeType, EdgeType>()
   const registerEvents = useRegisterEvents<NodeType, EdgeType>()
   const setSettings = useSetSettings<NodeType, EdgeType>()
@@ -43,7 +43,7 @@ const GraphControl = ({ disableHoverEffect }: { disableHoverEffect?: boolean }) 
    */
   useEffect(() => {
     // Create & load the graph
-    const graph = lightrageGraph()
+    const graph = academicrageGraph()
     loadGraph(graph)
     if (!(graph as any).__force_applied) {
       assignLayout()
@@ -85,7 +85,7 @@ const GraphControl = ({ disableHoverEffect }: { disableHoverEffect?: boolean }) 
       },
       clickStage: () => clearSelection()
     })
-  }, [assignLayout, loadGraph, registerEvents, lightrageGraph])
+  }, [assignLayout, loadGraph, registerEvents, academicrageGraph])
 
   /**
    * When component mount or hovered node change

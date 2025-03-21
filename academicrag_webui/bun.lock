@@ -2,7 +2,7 @@
   "lockfileVersion": 1,
   "workspaces": {
     "": {
-      "name": "lightrag-webui",
+      "name": "academicrag-webui",
       "dependencies": {
         "@faker-js/faker": "^9.5.0",
         "@radix-ui/react-alert-dialog": "^1.1.6",

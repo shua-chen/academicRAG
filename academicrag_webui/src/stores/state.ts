@@ -1,13 +1,13 @@
 import { create } from 'zustand'
 import { createSelectors } from '@/lib/utils'
-import { checkHealth, LightragStatus } from '@/api/academicrag'
+import { checkHealth, AcademicragStatus } from '@/api/academicrag'
 
 interface BackendState {
   health: boolean
   message: string | null
   messageTitle: string | null
 
-  status: LightragStatus | null
+  status: AcademicragStatus | null
 
   lastCheckTime: number
 

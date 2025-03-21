@@ -1,5 +1,5 @@
 [Unit]
-Description=LightRAG XYJ Ollama Service
+Description=AcademicRAG XYJ Ollama Service
 After=network.target
 
 [Service]
@@ -8,8 +8,8 @@ User=netman
 # Memory settings
 MemoryHigh=8G
 MemoryMax=12G
-WorkingDirectory=/home/netman/lightrag-xyj
-ExecStart=/home/netman/lightrag-xyj/lightrag-api
+WorkingDirectory=/home/netman/academicrag-xyj
+ExecStart=/home/netman/academicrag-xyj/academicrag-api
 Restart=always
 RestartSec=10
 
