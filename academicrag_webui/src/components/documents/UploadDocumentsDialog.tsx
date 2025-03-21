@@ -11,7 +11,7 @@ import {
 import FileUploader from '@/components/ui/FileUploader'
 import { toast } from 'sonner'
 import { errorMessage } from '@/lib/utils'
-import { uploadDocument } from '@/api/lightrag'
+import { uploadDocument } from '@/api/academicrag'
 
 import { UploadIcon } from 'lucide-react'
 

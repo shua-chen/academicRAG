@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { AsyncSelect } from '@/components/ui/AsyncSelect'
-import { getGraphLabels } from '@/api/lightrag'
+import { getGraphLabels } from '@/api/academicrag'
 import { useSettingsStore } from '@/stores/settings'
 import MiniSearch from 'minisearch'
 

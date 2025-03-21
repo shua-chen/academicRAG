@@ -3,7 +3,7 @@ import { useCallback, useEffect } from 'react'
 import { randomColor, errorMessage } from '@/lib/utils'
 import * as Constants from '@/lib/constants'
 import { useGraphStore, RawGraph } from '@/stores/graph'
-import { queryGraphs } from '@/api/lightrag'
+import { queryGraphs } from '@/api/academicrag'
 import { useBackendState } from '@/stores/state'
 import { useSettingsStore } from '@/stores/settings'
 

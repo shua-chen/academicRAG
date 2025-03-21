@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { createSelectors } from '@/lib/utils'
 import { defaultQueryLabel } from '@/lib/constants'
-import { Message, QueryRequest } from '@/api/lightrag'
+import { Message, QueryRequest } from '@/api/academicrag'
 
 type Theme = 'dark' | 'light' | 'system'
 type Tab = 'documents' | 'knowledge-graph' | 'retrieval' | 'api'

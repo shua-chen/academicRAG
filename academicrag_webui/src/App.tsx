@@ -9,7 +9,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { useEffect } from 'react'
 import { Toaster } from 'sonner'
 import SiteHeader from '@/features/SiteHeader'
-import { InvalidApiKeyError, RequireApiKeError } from '@/api/lightrag'
+import { InvalidApiKeyError, RequireApiKeError } from '@/api/academicrag'
 
 import GraphViewer from '@/features/GraphViewer'
 import DocumentManager from '@/features/DocumentManager'

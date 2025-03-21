@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { createSelectors } from '@/lib/utils'
-import { checkHealth, LightragStatus } from '@/api/lightrag'
+import { checkHealth, LightragStatus } from '@/api/academicrag'
 
 interface BackendState {
   health: boolean

@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { QueryMode, QueryRequest } from '@/api/lightrag'
+import { QueryMode, QueryRequest } from '@/api/academicrag'
 import Text from '@/components/ui/Text'
 import Input from '@/components/ui/Input'
 import Checkbox from '@/components/ui/Checkbox'

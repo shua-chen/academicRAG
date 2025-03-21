@@ -1,4 +1,4 @@
-import { LightragStatus } from '@/api/lightrag'
+import { LightragStatus } from '@/api/academicrag'
 
 const StatusCard = ({ status }: { status: LightragStatus | null }) => {
   if (!status) {

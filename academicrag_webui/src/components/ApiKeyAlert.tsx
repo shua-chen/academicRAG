@@ -10,7 +10,7 @@ import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import { useSettingsStore } from '@/stores/settings'
 import { useBackendState } from '@/stores/state'
-import { InvalidApiKeyError, RequireApiKeError } from '@/api/lightrag'
+import { InvalidApiKeyError, RequireApiKeError } from '@/api/academicrag'
 
 import { toast } from 'sonner'
 

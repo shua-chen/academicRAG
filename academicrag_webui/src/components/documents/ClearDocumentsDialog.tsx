@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/Dialog'
 import { toast } from 'sonner'
 import { errorMessage } from '@/lib/utils'
-import { clearDocuments } from '@/api/lightrag'
+import { clearDocuments } from '@/api/academicrag'
 
 import { EraserIcon } from 'lucide-react'
 

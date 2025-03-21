@@ -1,7 +1,7 @@
 import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { queryText, queryTextStream, Message as ChatMessage } from '@/api/lightrag'
+import { queryText, queryTextStream, Message as ChatMessage } from '@/api/academicrag'
 import { errorMessage } from '@/lib/utils'
 import { useSettingsStore } from '@/stores/settings'
 import { useDebounce } from '@/hooks/useDebounce'
