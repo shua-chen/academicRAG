@@ -547,7 +547,18 @@ await rag.apipeline_process_enqueue_documents(input)
 <details>
   <summary><b>Insert Multi-type File Support</b></summary>
 
-Any python tool that can convert the file types to TXT could be the solution for inserting multi-type file. For example:
+We provide a data pipeline for inserting multi-type files or folder. One can use the 'DataPipe' class in academicrag/datapipe.py as follows:
+
+```python
+from academicrag.datapipe import DataPipe
+
+dp = DataPipe()
+file_path='Your file/folder path'
+datas=dp.load_input(file_path)
+rag.insert(datas)
+```
+
+You can also deal the data by yourself. Any python tool that can convert the file types to TXT could be the solution for inserting multi-type file. For example:
 
 1. pdfminer for PDF file
 ```python
@@ -565,7 +576,7 @@ h = html2text.HTML2Text()
 h.ignore_links = True
 h.ignore_images = True
 with open("example.html", encoding="utf-8") as f:
-    rag.insert(h.handle(f).read())
+    rag.insert(h.handle(f.read()))
 ```
 
 The `textract` supports reading file types such as TXT, DOCX, PPTX, CSV, and PDF. But it could lead to some potential environment error. (Not recommand)
