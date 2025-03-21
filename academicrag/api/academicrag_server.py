@@ -621,7 +621,7 @@ class QueryRequest(BaseModel):
         description="The query text",
     )
 
-    mode: Literal["local", "global", "hybrid", "naive", "mix"] = Field(
+    mode: Literal["subgraph", "global", "hybrid", "naive", "mix"] = Field(
         default="hybrid",
         description="Query mode",
     )
@@ -645,7 +645,7 @@ class QueryRequest(BaseModel):
     top_k: Optional[int] = Field(
         ge=1,
         default=None,
-        description="Number of top items to retrieve. Represents entities in 'local' mode and relationships in 'global' mode.",
+        description="Number of top items to retrieve. Represents entities in 'subgraph' mode and relationships in 'global' mode.",
     )
 
     max_token_for_text_unit: Optional[int] = Field(
@@ -663,7 +663,7 @@ class QueryRequest(BaseModel):
     max_token_for_local_context: Optional[int] = Field(
         gt=1,
         default=None,
-        description="Maximum number of tokens allocated for entity descriptions in local retrieval.",
+        description="Maximum number of tokens allocated for entity descriptions in subgraph retrieval.",
     )
 
     hl_keywords: Optional[List[str]] = Field(
@@ -1151,15 +1151,18 @@ def create_app(args):
                 case ".txt" | ".md":
                     content = file.decode("utf-8")
                 case ".pdf":
-                    if not pm.is_installed("pypdf2"):
-                        pm.install("pypdf2")
-                    from PyPDF2 import PdfReader  # type: ignore
+                    if not pm.is_installed("pymupdf"):
+                        pm.install("pymupdf")
+                    import fitz  # type: ignore
                     from io import BytesIO
 
                     pdf_file = BytesIO(file)
-                    reader = PdfReader(pdf_file)
-                    for page in reader.pages:
-                        content += page.extract_text() + "\n"
+                    pdf_document = fitz.open(pdf_file)
+                    for i,page in enumerate(pdf_document):
+                        page_text = page.get_text("text").strip()
+                        if page_text:
+                            content += page_text + "\n"
+                    pdf_document.close()
                 case ".docx":
                     if not pm.is_installed("docx"):
                         pm.install("docx")

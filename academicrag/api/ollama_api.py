@@ -38,7 +38,7 @@ class SearchMode(str, Enum):
     subgraph = "subgraph"
     global_ = "global"
     hybrid = "hybrid"
-    #mix = "mix"
+    mix = "mix"
     bypass = "bypass"
 
 
@@ -126,7 +126,7 @@ def parse_query_mode(query: str) -> tuple[str, SearchMode]:
         "/global ": SearchMode.global_,  # global_ is used because 'global' is a Python keyword
         "/naive ": SearchMode.naive,
         "/hybrid ": SearchMode.hybrid,
-        #"/mix ": SearchMode.mix,
+        "/mix ": SearchMode.mix,
         "/bypass ": SearchMode.bypass,
     }
 
