@@ -1,0 +1,6 @@
+#!/bin/bash
+
+echo "Starting AcademicRAG server..."
+source path_to_anaconda/anaconda3/etc/profile.d/conda.sh
+conda activate academicrag
+academicrag-server

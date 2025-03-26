@@ -1,0 +1,17 @@
+[Unit]
+Description=AcademicRAG Service
+After=network.target
+
+[Service]
+Type=simple
+User=netman
+# Memory settings
+MemoryHigh=8G
+MemoryMax=12G
+WorkingDirectory=/home/netman/academicrag-xyj
+ExecStart=/home/netman/academicrag-xyj/academicrag-api
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
