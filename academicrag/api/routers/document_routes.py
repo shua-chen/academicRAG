@@ -284,15 +284,24 @@ async def pipeline_enqueue_file(rag: AcademicRAG, file_path: Path) -> bool:
                     result = converter.convert(file_path)
                     content = result.document.export_to_markdown()
                 else:
-                    if not pm.is_installed("pypdf2"):  # type: ignore
-                        pm.install("pypdf2")
-                    from PyPDF2 import PdfReader  # type: ignore
-                    from io import BytesIO
+                    if not pm.is_installed("pymupdf"):
+                        pm.install("pymupdf")
 
-                    pdf_file = BytesIO(file)
-                    reader = PdfReader(pdf_file)
-                    for page in reader.pages:
-                        content += page.extract_text() + "\n"
+                    import fitz
+
+                    pdf_document = fitz.open(file_path)
+                    content = ""
+                    pdf_length=0
+                    for i,page in enumerate(pdf_document):
+                        page_text = page.get_text("text").strip()
+                        if page_text:
+                            content += page_text+"\n"
+                            pdf_length+=len(page_text)
+                    pdf_document.close()
+                    # Validate content
+                    if not content or pdf_length == 0:
+                        logger.error(f"Empty content in file: {file_path.name}")
+                        return False
             case ".docx":
                 if global_args["main_args"].document_loading_engine == "DOCLING":
                     if not pm.is_installed("docling"):  # type: ignore

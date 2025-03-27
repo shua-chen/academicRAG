@@ -85,7 +85,7 @@ class DataPipe:
         for i,page in enumerate(pdf_document):
             page_text = page.get_text("text").strip()
             if page_text:
-                pdf_text += page_text
+                pdf_text += page_text+"\n"
                 pdf_length+=len(page_text)
         pdf_document.close()
 
