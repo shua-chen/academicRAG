@@ -47,17 +47,21 @@ class DataPipe:
         extracted_texts = loop.run_until_complete(
             tqdm_asyncio.gather(*tasks, desc="Extracting", total=len(tasks))
         )
+        all_file_texts=[]
+        for i in range(len(extracted_texts)):
+            if len(extracted_texts[i])>0:
+                all_file_texts.extend(extracted_texts[i])
+                self.tmp_file_paths+=[all_files[i]]*len(extracted_texts[i])
         if len(extracted_texts)==1:
-            extracted_texts=extracted_texts[0]
+            all_file_texts=extracted_texts[0]
             self.tmp_file_paths=self.tmp_file_paths[0]
         if return_paths:
-            return extracted_texts, self.tmp_file_paths
+            return all_file_texts, self.tmp_file_paths
         else:
-            return extracted_texts
+            return all_file_texts
     
     async def ahandle_single_file(self, path: str) -> List[str]:
         file_type = path.split(".")[-1]
-        self.tmp_file_paths.append(path)
         try:
             if file_type == "pdf":
                 return await self.handle_pdf(path)
@@ -71,7 +75,6 @@ class DataPipe:
                 return await self.handle_with_textract(path)
         except Exception as e:
             self.logger.error(f"Error while extracting text from {path}: {e}")
-            self.tmp_file_paths.remove(path)
             return []
         
     async def handle_pdf(self, path: str) -> List[Any]:
