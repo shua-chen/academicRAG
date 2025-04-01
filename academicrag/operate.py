@@ -145,7 +145,7 @@ async def _handle_single_entity_extraction(
         return None
 
     # Clean and validate entity name
-    entity_name = clean_str(record_attributes[1]).strip('"')
+    entity_name = clean_str(record_attributes[1]).strip('"').upper()
     if not entity_name.strip():
         logger.warning(
             f"Entity extraction error: empty entity name in: {record_attributes}"
@@ -153,7 +153,7 @@ async def _handle_single_entity_extraction(
         return None
 
     # Clean and validate entity type
-    entity_type = clean_str(record_attributes[2]).strip('"')
+    entity_type = clean_str(record_attributes[2]).strip('"').upper()
     if not entity_type.strip() or entity_type.startswith('("'):
         logger.warning(
             f"Entity extraction error: invalid entity type in: {record_attributes}"
@@ -185,10 +185,10 @@ async def _handle_single_relationship_extraction(
     if len(record_attributes) < 5 or record_attributes[0] != '"relationship"':
         return None
     # add this record as edge
-    source = clean_str(record_attributes[1]).strip('"')
-    target = clean_str(record_attributes[2]).strip('"')
+    source = clean_str(record_attributes[1]).strip('"').upper()
+    target = clean_str(record_attributes[2]).strip('"').upper()
     edge_description = clean_str(record_attributes[3]).strip('"')
-    edge_keywords = clean_str(record_attributes[4]).strip('"')
+    edge_keywords = clean_str(record_attributes[4]).strip('"').upper()
     edge_source_id = chunk_key
     weight = (
         float(record_attributes[-1].strip('"'))
