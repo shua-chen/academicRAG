@@ -87,9 +87,9 @@ const useSettingsStoreBase = create<SettingsState>()(
       retrievalHistory: [],
 
       querySettings: {
-        mode: 'global',
+        mode: 'hybrid',
         response_type: 'Multiple Paragraphs',
-        top_k: 10,
+        top_k: 60,
         max_token_for_text_unit: 4000,
         max_token_for_global_context: 4000,
         max_token_for_local_context: 4000,
@@ -98,7 +98,9 @@ const useSettingsStoreBase = create<SettingsState>()(
         stream: true,
         history_turns: 3,
         hl_keywords: [],
-        ll_keywords: []
+        ll_keywords: [],
+        max_tokens: 4096,
+        temperature: 1.0,
       },
 
       setTheme: (theme: Theme) => set({ theme }),
@@ -181,6 +183,8 @@ const useSettingsStoreBase = create<SettingsState>()(
         if (version < 7) {
           state.graphQueryMaxDepth = 3
           state.graphLayoutMaxIterations = 15
+          state.max_tokens= 4096
+          state.temperature = 1.0
         }
         if (version < 8) {
           state.graphMinDegree = 0

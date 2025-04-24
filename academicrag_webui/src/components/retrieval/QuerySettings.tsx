@@ -176,6 +176,47 @@ export default function QuerySettings() {
               />
             </>
 
+            {/* LLM Max Tokens */}
+            <>
+              <Text
+                className="ml-1"
+                text={t('retrievePanel.querySettings.maxTokens')}
+                tooltip={t('retrievePanel.querySettings.maxTokensTooltip')}
+                side="left"
+              />
+              <NumberInput
+                id="max_tokens"
+                stepper={100}
+                value={querySettings.max_tokens}
+                onValueChange={(v) => handleChange('max_tokens', v)}
+                min={512}
+                placeholder={t('retrievePanel.querySettings.maxTokensPlaceholder')}
+              />
+            </>
+
+            {/* Temperature */}
+            <>
+              <Text
+                className="ml-1"
+                text={t('retrievePanel.querySettings.temperature')}
+                tooltip={t('retrievePanel.querySettings.temperatureTooltip')}
+                side="left"
+              />
+              <NumberInput
+                id="temperature"
+                stepper={0.1}
+                value={querySettings.temperature}
+                onValueChange={(v) => handleChange('temperature', v)}
+                min={0}
+                max={2}
+                decimalScale={1}
+                fixedDecimalScale
+                placeholder={t('retrievePanel.querySettings.temperaturePlaceholder')}
+              />
+            </>
+
+            
+
             {/* Keywords */}
             <>
               <>

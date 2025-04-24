@@ -405,11 +405,6 @@ For help on any server, use the --help flag:
 academicrag-server --help
 ```
 
-Note: If you don't need the API functionality, you can install the base package without API support using:
-```bash
-pip install academicrag-hku
-```
-
 ## API Endpoints
 
 All servers (LoLLMs, Ollama, OpenAI and Azure OpenAI) provide the same REST API endpoints for RAG functionality. When API Server is running, visit:

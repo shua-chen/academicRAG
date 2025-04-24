@@ -255,6 +255,14 @@
       "historyTurnsTooltip": "Number of complete conversation turns (user-assistant pairs) to consider in the response context",
       "historyTurnsPlaceholder": "Number of history turns",
 
+      "maxTokens": "Max Tokens",
+      "maxTokensTooltip": "Maximum number of tokens for the output response.",
+      "maxTokensPlaceholder": "Max tokens",
+
+      "temperature": "Temperature",
+      "temperatureTooltip": "Controls the randomness of the output. Higher values (e.g., 0.8) make the output more random, while lower values (e.g., 0.2) make it more focused and deterministic.",
+      "temperaturePlaceholder": "Temperature value",
+
       "hlKeywords": "High-Level Keywords",
       "hlKeywordsTooltip": "List of high-level keywords to prioritize in retrieval. Separate with commas",
       "hlkeywordsPlaceHolder": "Enter keywords",

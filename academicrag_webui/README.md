@@ -10,7 +10,7 @@ LightRAG WebUI is a React-based web interface for interacting with the LightRAG 
 
 2.  **Install Dependencies:**
 
-    In the `lightrag_webui` directory, run the following command to install project dependencies:
+    In the `academicrag_webui` directory, run the following command to install project dependencies:
 
     ```bash
     bun install --frozen-lockfile

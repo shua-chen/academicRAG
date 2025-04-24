@@ -84,6 +84,12 @@ class QueryParam:
     ids: list[str] | None = None
     """List of ids to filter the results."""
 
+    max_tokens: int = int(os.getenv("LLM_RESPONSE_MAX_TOKENS", "4096"))
+    """Maximum number of tokens for the LLM response."""
+
+    temperature: float = float(os.getenv("LLM_TEMPERATURE", "1.0"))
+    """Controls the randomness of the LLM's output. Higher values produce more random responses."""
+
 
 @dataclass
 class StorageNameSpace(ABC):

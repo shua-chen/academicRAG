@@ -862,6 +862,8 @@ async def kg_query(
         query,
         system_prompt=sys_prompt,
         stream=query_param.stream,
+        max_tokens=query_param.max_tokens,
+        temperature=query_param.temperature,
     )
     if isinstance(response, str) and len(response) > len(sys_prompt):
         response = (
@@ -1174,6 +1176,8 @@ async def mix_kg_vector_query(
         query,
         system_prompt=sys_prompt,
         stream=query_param.stream,
+        max_tokens=query_param.max_tokens,
+        temperature=query_param.temperature,
     )
 
     # Clean up response content
@@ -1942,6 +1946,9 @@ async def naive_query(
     response = await use_model_func(
         query,
         system_prompt=sys_prompt,
+        stream=query_param.stream,
+        max_tokens=query_param.max_tokens,
+        temperature=query_param.temperature,
     )
 
     if len(response) > len(sys_prompt):
@@ -2086,6 +2093,8 @@ async def kg_query_with_keywords(
         query,
         system_prompt=sys_prompt,
         stream=query_param.stream,
+        max_tokens=query_param.max_tokens,
+        temperature=query_param.temperature,
     )
 
     # Clean up response content

@@ -97,6 +97,9 @@ export type QueryRequest = {
   conversation_history?: Message[]
   /** Number of complete conversation turns (user-assistant pairs) to consider in the response context. */
   history_turns?: number
+
+  max_tokens?: number
+  temperature?: number
 }
 
 export type QueryResponse = {
