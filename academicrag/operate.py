@@ -1597,11 +1597,11 @@ async def _find_most_related_edges_from_subgraph_entities(
     all_edges_data = truncate_list_by_token_size(
         all_edges_data,
         key=lambda x: x["description"],
-        max_token_size=query_param.max_token_for_global_context,
+        max_token_size=query_param.max_token_for_local_context,
     )
 
     logger.debug(
-        f"Truncate relations from {len(all_edges)} to {len(all_edges_data)} (max tokens:{query_param.max_token_for_global_context})"
+        f"Truncate relations from {len(all_edges)} to {len(all_edges_data)} (max tokens:{query_param.max_token_for_local_context})"
     )
 
     return all_edges_data
@@ -1776,10 +1776,10 @@ async def _find_most_related_entities_from_relationships(
     node_datas = truncate_list_by_token_size(
         node_datas,
         key=lambda x: x["description"] if x["description"] is not None else "",
-        max_token_size=query_param.max_token_for_local_context,
+        max_token_size=query_param.max_token_for_global_context,
     )
     logger.debug(
-        f"Truncate entities from {len_node_datas} to {len(node_datas)} (max tokens:{query_param.max_token_for_local_context})"
+        f"Truncate entities from {len_node_datas} to {len(node_datas)} (max tokens:{query_param.max_token_for_global_context})"
     )
 
     return node_datas
@@ -1994,7 +1994,7 @@ async def kg_query_with_keywords(
     # 1) Handle potential cache for query results
     # ---------------------------
     use_model_func = global_config["llm_model_func"]
-    args_hash = compute_args_hash(query_param.mode, query, cache_type="query")
+    args_hash = compute_args_hash(query_param, query, cache_type="query")
     cached_response, quantized, min_val, max_val = await handle_cache(
         hashing_kv, args_hash, query, query_param.mode, cache_type="query"
     )
@@ -2118,6 +2118,38 @@ async def kg_query_with_keywords(
     return response
 
 
+async def get_keywords_from_query(
+    query: str,
+    keywords_vdb: BaseVectorStorage,
+    query_param: QueryParam,
+    global_config: dict[str, str],
+    hashing_kv: BaseKVStorage | None = None,
+) -> tuple[list[str], list[str]]:
+    """
+    Retrieves high-level and low-level keywords for RAG operations.
+
+    This function checks if keywords are already provided in query parameters,
+    and if not, extracts them from the query text using LLM.
+
+    Args:
+        query: The user's query text
+        query_param: Query parameters that may contain pre-defined keywords
+        global_config: Global configuration dictionary
+        hashing_kv: Optional key-value storage for caching results
+
+    Returns:
+        A tuple containing (high_level_keywords, low_level_keywords)
+    """
+    # Check if pre-defined keywords are already provided
+    if query_param.hl_keywords or query_param.ll_keywords:
+        return query_param.hl_keywords, query_param.ll_keywords
+
+    # Extract keywords using extract_keywords_only function which already supports conversation history
+    hl_keywords, ll_keywords = await extract_keywords_with_keywords_vdb(
+        query, keywords_vdb, query_param, global_config, hashing_kv
+    )
+    return hl_keywords, ll_keywords
+
 async def query_with_keywords(
     query: str,
     prompt: str,
@@ -2154,7 +2186,7 @@ async def query_with_keywords(
         Query response or async iterator
     """
     # Extract keywords
-    hl_keywords, ll_keywords = await extract_keywords_with_keywords_vdb(
+    hl_keywords, ll_keywords = await get_keywords_from_query(
                 query, keywords_vdb, param, global_config, hashing_kv
             )
 
