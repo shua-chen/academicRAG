@@ -88,6 +88,18 @@ class QueryRequest(BaseModel):
         description="Number of complete conversation turns (user-assistant pairs) to consider in the response context.",
     )
 
+    max_tokens: Optional[int] = Field(
+        gt=512,
+        default=None,
+        description="Maximum number of tokens for the generated response. Default is 4096.",
+    )
+    temperature: Optional[float] = Field(
+        ge=0,
+        le=2,
+        default=None,
+        description="Controls randomness in response generation. Higher values yield more diverse outputs.",
+    )
+
     @field_validator("query", mode="after")
     @classmethod
     def query_strip_after(cls, query: str) -> str:
